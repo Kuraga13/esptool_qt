@@ -197,6 +197,11 @@ bool EspToolQt::autoConnect() {
 
     // determine chip id
     uint32_t x = read_reg(0x40001000);
+    if (x == 0) {
+        qInfo() << "[ERROR] Connection failed. Can't read target id.";
+        return false;
+    }
+
 
     for (auto attempt_target : available_targets){
         if (attempt_target->CHIP_COMPARE_MAGIC_VALUE(x)) {
@@ -204,6 +209,10 @@ bool EspToolQt::autoConnect() {
             target = attempt_target;
             break;
         }
+    }
+    if (x == 0) {
+        qInfo() << "[ERROR] Connection failed. Can't detectmine chip fammily.";
+        return false;
     }
 
     stubUpload();
