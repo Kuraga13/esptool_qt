@@ -639,7 +639,7 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
             if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
                 return false;
             }
-            progress((float)i / (float)upload.size() * 100);
+            progress((float)(i+1) / (float)upload.size() * 100);
             frame_n++;
             tmp_vec.clear();
         }

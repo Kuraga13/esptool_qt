@@ -91,6 +91,9 @@ public:
 
     void progress(float);
     bool serial_progress_enabled = false;
+
+signals:
+    void progress_signal(int);
 };
 
 #endif // ESP_TOOL_QT_H
