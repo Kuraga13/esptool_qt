@@ -389,14 +389,14 @@ SlipReply EspToolQt::slip_parse (vector<uint8_t> raw_data) {
         parsed_vec.push_back(i);
     }
 
-    // check the frame is reply frame
-    if (parsed_vec[0] != 1) {
+    // check the frame.size() > 4
+    if (parsed_vec.size() < 4) {
         slip.valid = false;
         return slip;
     }
 
-    // check the frame.size() > 4
-    if (parsed_vec.size() < 4) {
+    // check the frame is reply frame
+    if (parsed_vec[0] != 1) {
         slip.valid = false;
         return slip;
     }
