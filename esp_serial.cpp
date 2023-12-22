@@ -680,7 +680,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     appendU32(&md5_read_command, 0);
     vector<uint8_t> md5_read_command_frame = slip_encode (0x13, md5_read_command);
     serialWrite(md5_read_command_frame);
-    vector<uint8_t> reply = serialReadOneFrame();
+    vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
     SlipReply slip_reply = slip_parse(reply);
 
     // check that we have successfully read md5 from device
