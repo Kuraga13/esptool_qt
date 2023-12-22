@@ -150,7 +150,6 @@ bool EspToolQt::autoConnect() {
     vector<uint8_t> sync_sequence = slip_encode(ESP_SYNC, sync_sequence_data);
 
     vector<QString> ports = getPorts();
-    qInfo() << ports;
     QVector<ResetStrategy> resets;
     resets.append(ResetStrategy::classic_reset);
     resets.append(ResetStrategy::usb_jtag_serial_reset);
