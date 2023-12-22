@@ -70,7 +70,7 @@ public:
     uint32_t getFlashSize();
     void disconnect();
     std::vector<uint8_t> slip_encode (uint8_t command, std::vector<uint8_t>data, uint32_t checksum = 0);
-    bool slipCommandSend (uint8_t command, std::vector<uint8_t>data_field, uint32_t checksum = 0);
+    bool slipCommandSend (uint8_t command, std::vector<uint8_t>data_field, uint32_t checksum = 0, uint32_t timeout_ms = 1000);
 
     std::vector<uint8_t> slip_raw_encode (std::vector<uint8_t>&);
     bool slip_raw_send (std::vector<uint8_t>&, int timeout_ms = 1000);

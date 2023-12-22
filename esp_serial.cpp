@@ -330,10 +330,10 @@ vector<uint8_t> EspToolQt::slip_encode (uint8_t command, vector<uint8_t>data, ui
     return encoded_slip;
 }
 
-bool EspToolQt::slipCommandSend (uint8_t command, std::vector<uint8_t>data_field, uint32_t checksum) {
+bool EspToolQt::slipCommandSend (uint8_t command, std::vector<uint8_t>data_field, uint32_t checksum, uint32_t timeout_ms) {
     vector<uint8_t> packet = slip_encode(command, data_field, checksum);
     serialWrite(packet);
-    vector<uint8_t> reply = serialReadOneFrame();
+    vector<uint8_t> reply = serialReadOneFrame(timeout_ms);
     SlipReply slip_reply = slip_parse(reply);
     if (slip_reply.valid && slip_reply.command == command && slip_reply.data[0] == 0)
     {
@@ -596,7 +596,7 @@ bool EspToolQt::flashDataOneBlock(uint32_t sequence_number, std::vector<uint8_t>
     appendVec(data_field, data);
     uint32_t hash = calculate_esp_checksum(data);
 
-    return slipCommandSend((compressed) ? ESP_FLASH_DEFL_DATA : ESP_FLASH_DATA, data_field, hash);
+    return slipCommandSend((compressed) ? ESP_FLASH_DEFL_DATA : ESP_FLASH_DATA, data_field, hash, 5000);
 }
 
 // https://stackoverflow.com/questions/4538586/how-to-compress-a-buffer-with-zlib
@@ -615,18 +615,18 @@ std::vector<uint8_t> compress_vector(const std::vector<uint8_t>& source) {
 bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_t>& data, bool compress) {
     uint32_t max_packet_size = target->FLASH_WRITE_SIZE();
 
-    // calculate number of required packets
-    uint32_t number_of_data_packets = ceil((float)data.size() / float(max_packet_size));
-    if (!flashBegin(data.size(), number_of_data_packets, max_packet_size, memory_offset, compress)) {
-        return false;
-    }
-
     qInfo() << (compress ? "[OK] Compressed flash upload started" : "[OK] Flash upload started");
 
     // compress data if needed
     vector<uint8_t> compressed_data;
     if (compress) compressed_data = compress_vector(data);
     const vector<uint8_t>& upload = compress ? compressed_data : data;
+
+    // calculate number of required packets
+    uint32_t number_of_data_packets = ceil((float)upload.size() / float(max_packet_size));
+    if (!flashBegin(data.size(), number_of_data_packets, max_packet_size, memory_offset, compress)) {
+        return false;
+    }
 
     // write flash
     progress(0);
@@ -637,7 +637,6 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
         tmp_vec.push_back(upload[i]);
         if (tmp_vec.size() >= max_packet_size) {
             if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
-                qInfo() << "Flash Write Failed";
                 return false;
             }
             progress((float)i / (float)upload.size() * 100);
@@ -647,7 +646,6 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
     }
     if (tmp_vec.size() != 0) {
         if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
-            qInfo() << "Flash Write Failed";
             return false;
         }
     }
@@ -662,7 +660,10 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     uint32_t padding_required = 4 - data.size() % 4;
     if (padding_required) data.resize(data.size() + padding_required, 0xFF);
 
-    flashData(memory_offset, data, compressed);
+    if (!flashData(memory_offset, data, compressed)) {
+        qInfo() << "[ERROR] Flash upload failed";
+        return false;
+    }
 
     // Stub only writes each block to flash after 'ack'ing the receive,
     // so do a final dummy operation which will not be 'ack'ed
@@ -680,6 +681,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     appendU32(&md5_read_command, 0);
     vector<uint8_t> md5_read_command_frame = slip_encode (0x13, md5_read_command);
     serialWrite(md5_read_command_frame);
+    // read reply with custom timeout. md5 calculation takes some time
     vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
     SlipReply slip_reply = slip_parse(reply);
 
