@@ -683,6 +683,12 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     vector<uint8_t> reply = serialReadOneFrame();
     SlipReply slip_reply = slip_parse(reply);
 
+    // check that we have successfully read md5 from device
+    if (slip_reply.valid != true || slip_reply.data.size() < 18) {
+        qInfo() << "[ERROR] Failed to get md5 from device";
+        return false;
+    }
+
     // pop two status bytes from end of frame
     slip_reply.data.pop_back();
     slip_reply.data.pop_back();
