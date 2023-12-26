@@ -53,6 +53,7 @@ void EspToolQt::resetFromBoot()
     // Reset sequence for hard resetting the chip.
     // Can be used to reset out of the bootloader or to restart a running app.
     // https://github.com/espressif/esptool/blob/master/esptool/reset.py
+    serial->setDataTerminalReady(false);
     EscapeCommFunction(serial->handle(),SETRTS);
     QThread::msleep(200);
     EscapeCommFunction(serial->handle(),CLRRTS);
