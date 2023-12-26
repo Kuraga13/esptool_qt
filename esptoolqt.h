@@ -83,11 +83,14 @@ public:
     uint32_t readEfuse(uint8_t);
     uint32_t runSpiFlashCommand(uint32_t command, std::vector<uint8_t> data = {}, uint32_t read_bits = 0, uint32_t addr = 0, uint32_t addr_len = 0,  uint32_t dummy_len = 0);
 
+    // read flash
+    std::vector<uint8_t> readFlash(uint32_t memory_offset, uint32_t size);
+
     // write flash
     bool flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed = true);
 
-    // read flash
-    std::vector<uint8_t> readFlash(uint32_t memory_offset, uint32_t size);
+    // verify flash
+    bool verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data);
 
     void progress(float);
     bool serial_progress_enabled = false;

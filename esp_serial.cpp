@@ -652,26 +652,7 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
     return true;
 }
 
-bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
-    QTime start = QTime::currentTime();
-
-    // make data length multiple of 4
-    uint32_t padding_required = 4 - data.size() % 4;
-    if (padding_required) data.resize(data.size() + padding_required, 0xFF);
-
-    if (!flashData(memory_offset, data, compressed)) {
-        qInfo() << "[ERROR] Flash upload failed";
-        return false;
-    }
-
-    // Stub only writes each block to flash after 'ack'ing the receive,
-    // so do a final dummy operation which will not be 'ack'ed
-    // until the last block has actually been written out to flash
-    read_reg(target->CHIP_DETECT_MAGIC_REG_ADDR());
-
-    // get duration of write for speed test
-    int duration = start.msecsTo(QTime::currentTime());
-
+bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     // check md5 of written data
     vector<uint8_t> md5_read_command;
     appendU32(&md5_read_command, memory_offset);
@@ -701,10 +682,37 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     vector<uint8_t> md5_calculated = calculate_md5_hash(data);
 
     if (md5_from_esp == md5_calculated) {
-        qInfo() << "[OK] MD5 Check Passed";
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
+    QTime start = QTime::currentTime();
+
+    // make data length multiple of 4
+    uint32_t padding_required = 4 - data.size() % 4;
+    if (padding_required) data.resize(data.size() + padding_required, 0xFF);
+
+    if (!flashData(memory_offset, data, compressed)) {
+        qInfo() << "[ERROR] Flash upload failed";
+        return false;
+    }
+
+    // Stub only writes each block to flash after 'ack'ing the receive,
+    // so do a final dummy operation which will not be 'ack'ed
+    // until the last block has actually been written out to flash
+    read_reg(target->CHIP_DETECT_MAGIC_REG_ADDR());
+
+    // get duration of write for speed test
+    int duration = start.msecsTo(QTime::currentTime());
+
+    if (verifyFlash(memory_offset, data)) {
+        qInfo() << "[OK] Flash verification successful";
         qInfo() << "[OK] Flash Written Sucessfully";
     } else {
-        qInfo() << "[ERROR] MD5 Check Failed";
+        qInfo() << "[ERROR] Flash verification failed";
         qInfo() << "[ERROR] Flash Write Failed";
         return false;
     }
