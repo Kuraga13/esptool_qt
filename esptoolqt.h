@@ -29,12 +29,13 @@ private:
     bool flashDataOneBlock(uint32_t sequence_number, std::vector<uint8_t> &data, bool compressed);
     bool flashData(const uint32_t memory_offset, const std::vector<uint8_t>& data, bool compress);
 
+public:
     // helpers
     void appendU32(std::vector<uint8_t>*, uint32_t);
     void appendVec(std::vector<uint8_t>& append_to, const std::vector<uint8_t>& data);
     uint32_t flashSizeIdToBytes (uint8_t size_id);
 
-public:
+
     explicit EspToolQt(QObject *parent = nullptr);
     QSerialPort* serial = NULL;
     std::vector<EspBase*> available_targets;
