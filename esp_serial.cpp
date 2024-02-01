@@ -662,7 +662,7 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     vector<uint8_t> md5_read_command_frame = slip_encode (0x13, md5_read_command);
     serialWrite(md5_read_command_frame);
     // read reply with custom timeout. md5 calculation takes some time
-    vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
+    vector<uint8_t> reply = serialReadOneFrame((uint32_t)10000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
     SlipReply slip_reply = slip_parse(reply);
 
     // check that we have successfully read md5 from device
