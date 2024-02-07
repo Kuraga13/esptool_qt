@@ -369,33 +369,8 @@ bool EspToolQt::slip_raw_send (std::vector<uint8_t>& data, int timeout_ms) {
     return serialWrite(message, timeout_ms);
 }
 
-SlipReply EspToolQt::slip_parse (vector<uint8_t> raw_data) {
+SlipReply EspToolQt::slip_parse (vector<uint8_t> parsed_vec) {
     SlipReply slip;
-    vector<uint8_t> parsed_vec;
-    bool escape_character = false;
-
-    for (uint8_t i : raw_data) {
-        // within the packet, all occurrences of 0xC0 and 0xDB are replaced with 0xDB 0xDC and 0xDB 0xDD, respectively.
-        if (i == 0xDB && !escape_character) {
-            escape_character = true;
-            continue;
-        } else if (escape_character) {
-            if (i == 0xDC) {
-                parsed_vec.push_back(0xC0);
-                escape_character = false;
-                continue;
-            } else if (i == 0xDD) {
-                parsed_vec.push_back(0xDB);
-                escape_character = false;
-                continue;
-            } else {
-                break;
-            }
-        }
-
-        // assume that all other data is valid
-        parsed_vec.push_back(i);
-    }
 
     // check the frame.size() > 4
     if (parsed_vec.size() < 4) {
@@ -423,7 +398,6 @@ SlipReply EspToolQt::slip_parse (vector<uint8_t> raw_data) {
     slip.value = (parsed_vec[4]) | (parsed_vec[5] << 8) | (parsed_vec[6] << 16) | (parsed_vec[7] << 24);
     slip.data.insert(slip.data.begin(), parsed_vec.begin() + 8, parsed_vec.end());
 
-    //        qInfo() << "RawVec:" << raw_data;
     //        qInfo() << "ParsedVec:" << parsed_vec; ;
     //        qInfo() << "SlipReply is Valid: " << slip.valid;
     //        qInfo() << "Slip Command:" << slip.command;
@@ -662,7 +636,7 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     vector<uint8_t> md5_read_command_frame = slip_encode (0x13, md5_read_command);
     serialWrite(md5_read_command_frame);
     // read reply with custom timeout. md5 calculation takes some time
-    vector<uint8_t> reply = serialReadOneFrame((uint32_t)10000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
+    vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
     SlipReply slip_reply = slip_parse(reply);
 
     // check that we have successfully read md5 from device
@@ -692,7 +666,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     QTime start = QTime::currentTime();
 
     // make data length multiple of 4
-    uint32_t padding_required = 4 - data.size() % 4;
+    uint32_t padding_required = (4 - data.size() % 4) % 4;
     if (padding_required) data.resize(data.size() + padding_required, 0xFF);
 
     if (!flashData(memory_offset, data, compressed)) {
@@ -709,10 +683,10 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     int duration = start.msecsTo(QTime::currentTime());
 
     if (verifyFlash(memory_offset, data)) {
-        qInfo() << "[OK] Flash verification successful";
-        qInfo() << "[OK] Flash Written Sucessfully";
+        qInfo() << "[OK] Flash Verification Successful";
+        qInfo() << "[OK] Flash Written Successfully";
     } else {
-        qInfo() << "[ERROR] Flash verification failed";
+        qInfo() << "[ERROR] Flash Verification Failed";
         qInfo() << "[ERROR] Flash Write Failed";
         return false;
     }
