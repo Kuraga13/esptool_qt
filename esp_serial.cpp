@@ -665,6 +665,12 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
 
+    // skip zero size writes
+    if (data.size() == 0) {
+        qInfo() << "[INFO] Zero Sized Write Operation Skipped";
+        return true;
+    }
+
     // make data length multiple of 4
     uint32_t padding_required = (4 - data.size() % 4) % 4;
     if (padding_required) data.resize(data.size() + padding_required, 0xFF);
