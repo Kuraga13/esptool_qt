@@ -41,6 +41,8 @@ EspToolQt::EspToolQt(QObject *parent) : QObject {parent} {
     available_targets.push_back(new Esp32C6(parent));
     available_targets.push_back(new Esp32H2(parent));
     //available_targets.push_back(new Esp32P4(parent));
+    
+    esp_target_info.connected = false;
 }
 
 uint32_t EspToolQt::read_reg(uint32_t address) {

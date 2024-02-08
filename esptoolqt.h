@@ -13,6 +13,14 @@
 
 enum ResetStrategy { classic_reset, usb_jtag_serial_reset };
 
+struct EspTargetInfo {
+    bool connected;
+    QString chip_family;
+    QString chip_description;
+    QString chip_features;
+    uint32_t flash_size;
+};
+
 class EspToolQt : public QObject
 {
     Q_OBJECT
@@ -40,6 +48,7 @@ public:
     QSerialPort* serial = NULL;
     std::vector<EspBase*> available_targets;
     EspBase* target = NULL;
+    EspTargetInfo esp_target_info;
 
     struct SlipReply {bool valid = false; uint8_t command = 0; uint32_t value = 0; std::vector<uint8_t> data;};
 

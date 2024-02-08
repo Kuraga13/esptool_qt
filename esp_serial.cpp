@@ -138,6 +138,7 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
 }
 
 bool EspToolQt::autoConnect() {
+    esp_target_info.connected = false;
 
     const vector<uint8_t> sync_sequence_data = {
         0x07, 0x07, 0x12, 0x20,
@@ -230,9 +231,15 @@ bool EspToolQt::autoConnect() {
     QString CrystalFrequencyStr = QString("Crystal is %1MHz").arg(QString::number(CrystalFrequency));
     qInfo().noquote() << CrystalFrequencyStr;
 
-    getFlashSize();
+    uint32_t flash_size = getFlashSize();
 
-    return done;
+    esp_target_info.connected = true;
+    esp_target_info.chip_family = target->CHIP_NAME();
+    esp_target_info.chip_description = chip_description;
+    esp_target_info.chip_features = chip_features;
+    esp_target_info.flash_size = flash_size;
+
+    return true;
 }
 
 bool EspToolQt::stubUpload() {
