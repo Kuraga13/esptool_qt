@@ -694,6 +694,8 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
     // get duration of write for speed test
     int duration = start.msecsTo(QTime::currentTime());
+	
+	qInfo() << "[INFO] Verification started. Please Wait";
 
     if (verifyFlash(memory_offset, data)) {
         qInfo() << "[OK] Flash Verification Successful";
