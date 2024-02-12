@@ -495,10 +495,16 @@ bool EspToolQt::mem_end(uint32_t entry_address) {
 std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     QTime start = QTime::currentTime();
 
-    progress(0);
-
     vector<uint8_t> received_data;
     vector<uint8_t> zero;
+
+    // check that target is connected
+    if (target == NULL || serial == NULL) {
+        qInfo() << "[Error] Target is not connected";
+        return zero;
+    }
+
+    progress(0);
 
     vector<uint8_t> data_field;
     appendU32(&data_field, offset);
@@ -671,6 +677,12 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
 
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
+
+    // check that target is connected
+    if (target == NULL || serial == NULL) {
+        qInfo() << "[Error] Target is not connected";
+        return false;
+    }
 
     // skip zero size writes
     if (data.size() == 0) {
