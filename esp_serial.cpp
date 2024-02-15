@@ -137,7 +137,7 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
     return zero;
 }
 
-bool EspToolQt::autoConnect() {
+bool EspToolQt::autoConnect(QString port) {
     esp_target_info.connected = false;
 
     const vector<uint8_t> sync_sequence_data = {
@@ -150,7 +150,14 @@ bool EspToolQt::autoConnect() {
 
     vector<uint8_t> sync_sequence = slip_encode(ESP_SYNC, sync_sequence_data);
 
-    vector<QString> ports = getPorts();
+    std::vector<QString> ports;
+    
+    if (port.isEmpty()) {
+        ports = getPorts();
+    } else {
+        ports.push_back(port);
+    }
+
     QVector<ResetStrategy> resets;
     resets.append(ResetStrategy::classic_reset);
     resets.append(ResetStrategy::usb_jtag_serial_reset);
@@ -162,25 +169,28 @@ bool EspToolQt::autoConnect() {
 
         for (auto reset : resets){
             qInfo() << "Try" << *port << "reset_strategy" << reset;
-            openPort(*port,115200);
-            resetToBoot(reset);
+            bool port_opened = openPort(*port,115200);
+            if (port_opened) {
+                resetToBoot(reset);
 
-            for (int i = 0; i < 4; i++) {
-                serialWrite(sync_sequence, 50);
-                vector<uint8_t> data = serialRead(50);
+                for (int i = 0; i < 4; i++) {
+                    serialWrite(sync_sequence, 50);
+                    vector<uint8_t> data = serialRead(50);
 
-                if (data.size() > 50){
-                    done = true;
-                    found_port = *port;
-                    resetStrategy = reset;
-                    break;
+                    if (data.size() > 50){
+                        done = true;
+                        found_port = *port;
+                        resetStrategy = reset;
+                        break;
+                    }
+
+                    if (done) break;
                 }
 
                 if (done) break;
+                closePort();
             }
-
-            if (done) break;
-            closePort();
+            
         }
         if (done) break;
     }
