@@ -23,6 +23,15 @@ using std::vector;
 using std::ceil;
 using SlipReply = EspToolQt::SlipReply;
 
+std::vector<QString> EspToolQt::getFamilies() {
+    std::vector<QString> families;
+
+    for (auto target : available_targets){
+        families.push_back(target->CHIP_NAME());
+    }
+    return families;
+}
+
 vector<QString> EspToolQt::getPorts() {
     vector<QString> port_list;
 
