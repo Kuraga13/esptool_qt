@@ -148,6 +148,7 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
 
 bool EspToolQt::autoConnect(QString port) {
     esp_target_info.connected = false;
+    closePort(); // close port if it was opened
 
     const vector<uint8_t> sync_sequence_data = {
         0x07, 0x07, 0x12, 0x20,
@@ -198,6 +199,8 @@ bool EspToolQt::autoConnect(QString port) {
 
                 if (done) break;
                 closePort();
+            } else {
+                qInfo() << "Can't open port";
             }
             
         }
