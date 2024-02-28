@@ -54,7 +54,6 @@ void MainWindow::connect()
 ```c++
 void MainWindow::read()
 {
-
     if(!esp_tool->autoConnect()) {
         qCritical() << "ESP Connection error";
         return;
