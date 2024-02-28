@@ -623,7 +623,7 @@ std::vector<uint8_t> compress_vector(const std::vector<uint8_t>& source) {
 bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_t>& data, bool compress) {
     uint32_t max_packet_size = target->FLASH_WRITE_SIZE();
 
-    qInfo() << (compress ? "[OK] Compressed flash upload started" : "[OK] Flash upload started");
+    // qInfo() << (compress ? "[OK] Compressed flash upload started" : "[OK] Flash upload started");
 
     // compress data if needed
     vector<uint8_t> compressed_data;
@@ -637,7 +637,6 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
     }
 
     // write flash
-    progress(0);
     vector<uint8_t> tmp_vec;
     tmp_vec.reserve(max_packet_size);
     uint32_t frame_n = 0;
@@ -647,7 +646,6 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
             if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
                 return false;
             }
-            progress((float)(i+1) / (float)upload.size() * 100);
             frame_n++;
             tmp_vec.clear();
         }
@@ -657,11 +655,17 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
             return false;
         }
     }
-    progress(100);
+    
+    // Stub only writes each block to flash after 'ack'ing the receive,
+    // so do a final dummy operation which will not be 'ack'ed
+    // until the last block has actually been written out to flash
+    read_reg(target->CHIP_DETECT_MAGIC_REG_ADDR());
+
     return true;
 }
 
-bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
+bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data) {
+
     // check md5 of written data
     vector<uint8_t> md5_read_command;
     appendU32(&md5_read_command, memory_offset);
@@ -697,8 +701,10 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     }
 }
 
+// #define ESP_TOOL_UPLOAD_DEBUG
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
+    bool upload_result;
 
     // check that target is connected
     if (target == NULL || serial == NULL) {
@@ -716,33 +722,122 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     uint32_t padding_required = (4 - data.size() % 4) % 4;
     if (padding_required) data.resize(data.size() + padding_required, 0xFF);
 
-    if (!flashData(memory_offset, data, compressed)) {
-        qInfo() << "[ERROR] Flash upload failed";
-        return false;
+    // split data in 100 blocks
+    int total_length = data.size();
+    int blocks_per_percent = total_length / 4096 / 100;
+    if (blocks_per_percent < 8) blocks_per_percent = 8;
+    int block_size = blocks_per_percent * 4096;
+
+    #ifdef ESP_TOOL_UPLOAD_DEBUG
+    qInfo() << "[DEBUG] Start of Uploading Process";
+    qInfo() << "[DEBUG] Upload data block by block...";
+    qInfo() << "[DEBUG] total_length =" << total_length;
+    qInfo() << "[DEBUG] blocks_per_percent =" << blocks_per_percent;
+    qInfo() << "[DEBUG] block_size =" << block_size;
+    #endif // ESP_TOOL_UPLOAD_DEBUG
+
+    // upload data block by block
+    for(int offset = memory_offset; offset < total_length; offset += block_size) {
+        // amount of data left to write
+        int data_left = (total_length - offset);
+        
+        // size of current block
+        int current_block_size = (data_left >= block_size) ? block_size : data_left;
+
+        // prepare block for writing
+        std::vector<uint8_t> block;
+        block.insert(block.end(), data.begin() + offset, data.begin() + offset + current_block_size);
+
+        #ifdef ESP_TOOL_UPLOAD_DEBUG
+        qInfo() << "[DEBUG] Writing block with offset [bytes]:" << offset;
+        qInfo() << "[DEBUG] Data left to write [bytes]:" << data_left;
+        qInfo() << "[DEBUG] Current Block Size [bytes]:" << block.size();
+        #endif // ESP_TOOL_UPLOAD_DEBUG
+
+        // write block in 3 attempts;
+        for(int attempt = 0; attempt < 3; attempt++) {
+            if (attempt != 0) qInfo() << "Retry data block";
+            upload_result = flashData(offset, block, compressed);
+            if (upload_result == true) {
+                upload_result = verifyFlashPr(offset, block);
+                if (upload_result == true) break;
+            }
+        }
+
+        // stop writing process if one block failed
+        if (upload_result == false) {
+            qInfo().noquote() << QString("[ERROR] Flash failed at memory range [0x%1-0x%2]")
+                .arg(QString::number(offset, 16).toUpper()).arg(QString::number(offset + current_block_size, 16).toUpper());
+            break;
+        }
+
+        // update progress bar
+        emit progress_signal((offset + current_block_size) * 100 / total_length);
     }
 
-    // Stub only writes each block to flash after 'ack'ing the receive,
-    // so do a final dummy operation which will not be 'ack'ed
-    // until the last block has actually been written out to flash
-    read_reg(target->CHIP_DETECT_MAGIC_REG_ADDR());
+    if (!upload_result) {
+        return false;
+    }
 
     // get duration of write for speed test
     int duration = start.msecsTo(QTime::currentTime());
-	
-	qInfo() << "[INFO] Verification started. Please Wait";
-
-    if (verifyFlash(memory_offset, data)) {
-        qInfo() << "[OK] Flash Verification Successful";
-        qInfo() << "[OK] Flash Written Successfully";
-    } else {
-        qInfo() << "[ERROR] Flash Verification Failed";
-        qInfo() << "[ERROR] Flash Write Failed";
-        return false;
-    }
-
     float speed = ((float)data.size() * 8 / 1000) / ((float)duration / 1000);
-    qInfo() << "[OK] Effective write speed [kbit/s]:" << speed;
+    qInfo() << "[OK] Effective speed [kbit/s]:" << speed;
     return true;
 }
 
+// #define ESP_TOOL_VERIFY_DEBUG
+bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
+    bool verify_result;
+    
+    // split data in 100 blocks
+    int total_length = data.size();
+    int blocks_per_percent = total_length / 4096 / 100;
+    if (blocks_per_percent < 8) blocks_per_percent = 8;
+    int block_size = blocks_per_percent * 4096;
 
+    #ifdef ESP_TOOL_VERIFY_DEBUG
+    qInfo() << "[DEBUG] Start of Verification Process";
+    qInfo() << "[DEBUG] Verifing data block by block...";
+    qInfo() << "[DEBUG] total_length =" << total_length;
+    qInfo() << "[DEBUG] blocks_per_percent =" << blocks_per_percent;
+    qInfo() << "[DEBUG] block_size =" << block_size;
+    #endif // ESP_TOOL_VERIFY_DEBUG
+
+    for(int offset = memory_offset; offset < total_length; offset += block_size) {
+        // amount of data left to verify
+        int data_left = (total_length - offset);
+        
+        // size of current block
+        int current_block_size = (data_left >= block_size) ? block_size : data_left;
+
+        // prepare block for verification 
+        std::vector<uint8_t> block;
+        block.insert(block.end(), data.begin() + offset, data.begin() + offset + current_block_size);
+
+        #ifdef ESP_TOOL_VERIFY_DEBUG
+        qInfo() << "[DEBUG] Verifying block with offset [bytes]:" << offset;
+        qInfo() << "[DEBUG] Data left to verify [bytes]:" << data_left;
+        qInfo() << "[DEBUG] Current Block Size [bytes]:" << block.size();
+        #endif // ESP_TOOL_VERIFY_DEBUG
+
+        // verify block in 3 attempts;
+        for(int attempt = 0; attempt < 3; attempt++) {
+            if (attempt != 0) qInfo() << "Retry to verify data block";
+            verify_result = verifyFlashPr(offset, block);
+            if (verify_result == true) break;
+        }
+
+        // stop verification process if one block failed
+        if (verify_result == false) {
+            qInfo().noquote() << QString("Verification failed at memory range [0x%1-0x%2]")
+                .arg(QString::number(offset, 16).toUpper()).arg(QString::number(offset + current_block_size, 16).toUpper());
+            break;
+        }
+
+        // update progress bar
+        emit progress_signal((offset + current_block_size) * 100 / total_length);
+    }
+    
+    return verify_result;
+}

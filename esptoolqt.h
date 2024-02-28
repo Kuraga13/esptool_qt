@@ -37,6 +37,9 @@ private:
     bool flashDataOneBlock(uint32_t sequence_number, std::vector<uint8_t> &data, bool compressed);
     bool flashData(const uint32_t memory_offset, const std::vector<uint8_t>& data, bool compress);
 
+    // verify flash
+    bool verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data);
+
 public:
     // helpers
     void appendU32(std::vector<uint8_t>*, uint32_t);
