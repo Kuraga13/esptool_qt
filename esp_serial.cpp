@@ -702,7 +702,7 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
     }
 }
 
-// #define ESP_TOOL_UPLOAD_DEBUG
+#define ESP_TOOL_UPLOAD_DEBUG
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
     bool upload_result;
@@ -738,16 +738,16 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     #endif // ESP_TOOL_UPLOAD_DEBUG
 
     // upload data block by block
-    for(int offset = memory_offset; offset < total_length; offset += block_size) {
+    for(int offset = memory_offset; offset < memory_offset + total_length; offset += block_size) {
         // amount of data left to write
-        int data_left = (total_length - offset);
+        int data_left = (total_length - (offset - memory_offset));
         
         // size of current block
         int current_block_size = (data_left >= block_size) ? block_size : data_left;
 
         // prepare block for writing
         std::vector<uint8_t> block;
-        block.insert(block.end(), data.begin() + offset, data.begin() + offset + current_block_size);
+        block.insert(block.end(), data.begin() + (offset - memory_offset), data.begin() + (offset - memory_offset) + current_block_size);
 
         #ifdef ESP_TOOL_UPLOAD_DEBUG
         qInfo() << "[DEBUG] Writing block with offset [bytes]:" << offset;
@@ -805,16 +805,16 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     qInfo() << "[DEBUG] block_size =" << block_size;
     #endif // ESP_TOOL_VERIFY_DEBUG
 
-    for(int offset = memory_offset; offset < total_length; offset += block_size) {
+    for(int offset = memory_offset; offset < memory_offset + total_length; offset += block_size) {
         // amount of data left to verify
-        int data_left = (total_length - offset);
+        int data_left = total_length - (offset - memory_offset);
         
         // size of current block
         int current_block_size = (data_left >= block_size) ? block_size : data_left;
 
         // prepare block for verification 
         std::vector<uint8_t> block;
-        block.insert(block.end(), data.begin() + offset, data.begin() + offset + current_block_size);
+        block.insert(block.end(), data.begin() + (offset - memory_offset), data.begin() + (offset - memory_offset) + current_block_size);
 
         #ifdef ESP_TOOL_VERIFY_DEBUG
         qInfo() << "[DEBUG] Verifying block with offset [bytes]:" << offset;
