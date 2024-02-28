@@ -1,7 +1,8 @@
 Example in progress.
 Will be finished in a few days
 
-### To build:
+### Build
+run bat in command prompt in next sequence
 ```
 configure.bat
 build.bat
