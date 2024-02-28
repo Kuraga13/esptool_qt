@@ -1,7 +1,7 @@
 Example in progress.
 Will be finished in a few days
 
-### Build
+## Build
 run bat in command prompt in next sequence
 ```
 configure
@@ -9,6 +9,6 @@ build
 run
 ```
 
-Dependencies:
+## Dependencies:
 QT5.15
 CMAKE
