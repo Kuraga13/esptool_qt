@@ -15,6 +15,7 @@ enum ResetStrategy { classic_reset, usb_jtag_serial_reset };
 
 struct EspTargetInfo {
     bool connected;
+    QString com_port;
     QString chip_family;
     QString chip_description;
     QString chip_features;

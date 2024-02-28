@@ -256,6 +256,7 @@ bool EspToolQt::autoConnect(QString port) {
     uint32_t flash_size = getFlashSize();
 
     esp_target_info.connected = true;
+    esp_target_info.com_port = found_port;
     esp_target_info.chip_family = target->CHIP_NAME();
     esp_target_info.chip_description = chip_description;
     esp_target_info.chip_features = chip_features;
