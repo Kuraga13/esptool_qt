@@ -1,5 +1,5 @@
 # esptool_qt
-ESP flasher on QT C++
+ESP flasher library on QT C++
 
 ## Contributing
 Feel free to contribute. Our main idea is build sustainable community around this, so we can convenient programming ESP mcu's on desktop applications with Qt. 
