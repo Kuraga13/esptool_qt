@@ -702,7 +702,7 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
     }
 }
 
-#define ESP_TOOL_UPLOAD_DEBUG
+// #define ESP_TOOL_UPLOAD_DEBUG
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
     bool upload_result;
