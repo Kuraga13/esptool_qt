@@ -34,7 +34,8 @@ MainWindow::MainWindow(QWidget *parent)
 ```
 ### Connect
 ```c++
-void MainWindow::connect() {
+void MainWindow::connect()
+{
 
     if(!esp_tool->autoConnect()) {
         qCritical() << "ESP Connection error";
@@ -51,7 +52,8 @@ void MainWindow::connect() {
 ```
 ### Read
 ```c++
-void MainWindow::connect() {
+void MainWindow::read()
+{
 
     if(!esp_tool->autoConnect()) {
         qCritical() << "ESP Connection error";
