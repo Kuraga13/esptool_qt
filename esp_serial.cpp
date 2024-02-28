@@ -725,7 +725,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     // split data in 100 blocks
     int total_length = data.size();
     int blocks_per_percent = total_length / 4096 / 100;
-    if (blocks_per_percent < 8) blocks_per_percent = 8;
+    if (blocks_per_percent < 2) blocks_per_percent = 2;
     int block_size = blocks_per_percent * 4096;
 
     #ifdef ESP_TOOL_UPLOAD_DEBUG
@@ -793,7 +793,7 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     // split data in 100 blocks
     int total_length = data.size();
     int blocks_per_percent = total_length / 4096 / 100;
-    if (blocks_per_percent < 8) blocks_per_percent = 8;
+    if (blocks_per_percent < 2) blocks_per_percent = 2;
     int block_size = blocks_per_percent * 4096;
 
     #ifdef ESP_TOOL_VERIFY_DEBUG
