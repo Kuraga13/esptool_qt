@@ -64,6 +64,7 @@ uint32_t Esp32H2::get_crystal_freq(void* esp_tool) {
 
 QVector<QString> Esp32H2::CHIP_TARGETS() { return {
 
+    "ESP32-H2",
     "ESP32-H2FH2",
     "ESP32-H2FH4",
     "ESP32-H2-MINI-1-N2",
