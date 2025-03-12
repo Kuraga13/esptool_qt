@@ -64,3 +64,21 @@ uint32_t Esp32C6::get_crystal_freq(void* esp_tool) {
     // ESP32C6 XTAL is fixed to 40MHz
     return 40;
 }
+
+QVector<QString> Esp32C6::CHIP_TARGETS() { return {
+
+    "ESP32-C6",
+    "ESP32-C6FH4",
+    "ESP32-C6FH8",
+    "ESP32-C6-WROOM-1-N4",
+    "ESP32-C6-WROOM-1U-N4",
+    "ESP32-C6-WROOM-1-N8",
+    "ESP32-C6-WROOM-1U-N8",
+    "ESP32-C6-WROOM-1-N16",
+    "ESP32-C6-MINI-1-N4",
+    "ESP32-C6-MINI-1-H4",
+    "ESP32-C6-MINI-1U-N4",
+    "ESP32-C6-MINI-1-H8",
+    "ESP32-C6-MINI-1U-H4"
+
+};}

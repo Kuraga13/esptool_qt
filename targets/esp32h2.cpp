@@ -61,3 +61,28 @@ uint32_t Esp32H2::get_crystal_freq(void* esp_tool) {
     // ESP32H2 XTAL is fixed to 32MHz
     return 32;
 }
+
+QVector<QString> Esp32H2::CHIP_TARGETS() { return {
+
+    "ESP32-H2FH2",
+    "ESP32-H2FH4",
+    "ESP32-H2-MINI-1-N2",
+    "ESP32-H2-MINI-1U-N2",
+    "ESP32-H2-MINI-1-N4",
+    "ESP32-H2-MINI-1U-N4",
+    "ESP32-H2-MINI-1-H2",
+    "ESP32-H2-MINI-1-H4",
+    "ESP32-H2-MINI-1U-H2",
+    "ESP32-H2-MINI-1U-H4",
+    "ESP32-H2-MINI-1-H2S",
+    "ESP32-H2-MINI-1-H4S",
+    "ESP32-H2-MINI-1U-H2S",
+    "ESP32-H2-MINI-1U-H4S",
+    "ESP32-H2FH2S",
+    "ESP32-H2FH4S",
+    "ESP32-H2-WROOM-02C-H2",
+    "ESP32-H2-WROOM-02C-H4",
+    "ESP32-H2-WROOM-02C-H2S",
+    "ESP32-H2-WROOM-02C-H4S"
+
+};}

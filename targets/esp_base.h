@@ -19,6 +19,7 @@ private:
 public:
     explicit EspBase(QObject *parent) : QObject {parent} {}
     virtual QString CHIP_NAME() = 0;
+    virtual QVector<QString> CHIP_TARGETS() = 0;
 
     // This ROM address has a different value on each chip model
     static uint32_t CHIP_DETECT_MAGIC_REG_ADDR() {return 0x40001000;}

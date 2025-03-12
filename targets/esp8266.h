@@ -19,7 +19,8 @@ private:
 
 public:
     explicit Esp8266(QObject *parent) : EspBase {parent} {}
-    virtual QString CHIP_NAME() {return "ESP8266";}
+    QString CHIP_NAME() {return "ESP8266";}
+    QVector<QString> CHIP_TARGETS();
 
     // STUB
     virtual uint32_t stub_entry() {return 1074843652;}

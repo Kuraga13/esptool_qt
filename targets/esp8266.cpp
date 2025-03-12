@@ -121,3 +121,20 @@ uint32_t Esp8266::get_crystal_freq(void* _esp_tool) {
     uint32_t norm_xtal = (est_xtal > 33) ? 40 : 26;
     return norm_xtal;
 }
+
+QVector<QString> Esp8266::CHIP_TARGETS() { return {
+
+    "ESP8266",
+    "ESP8266EX",
+    "ESP8285N08",
+    "ESP8285H16",
+    "ESP-WROOM-02D-N2",
+    "ESP-WROOM-02D-N4",
+    "ESP-WROOM-02D-H2",
+    "ESP-WROOM-02U-N2",
+    "ESP-WROOM-02U-N4",
+    "ESP-WROOM-02U-H2",
+    "ESP-WROOM-02-N2",
+    "ESP-WROOM-S2-N2"
+
+};}

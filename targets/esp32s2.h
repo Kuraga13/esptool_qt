@@ -26,7 +26,8 @@ private:
 
 public:
     explicit Esp32S2(QObject *parent) : EspBase {parent} {}
-    virtual QString CHIP_NAME() {return "ESP32-S2";}
+    QString CHIP_NAME() {return "ESP32-S2";}
+    QVector<QString> CHIP_TARGETS();
 
     // STUB
     virtual uint32_t stub_entry() {return 1073907716;}

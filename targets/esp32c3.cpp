@@ -138,3 +138,40 @@ uint32_t Esp32C3::get_crystal_freq(void* esp_tool) {
     // ESP32C3 XTAL is fixed to 40MHz
     return 40;
 }
+
+QVector<QString> Esp32C3::CHIP_TARGETS() { return {
+
+    "ESP32-C3",
+    "ESP32-C3FN4",
+    "ESP32-C3FH4",
+    "ESP32-C3FH4X",
+    "ESP32-C3-MINI-1-N4",
+    "ESP32-C3-MINI-1-N4X",
+    "ESP32-C3-MINI-1-H4",
+    "ESP32-C3-MINI-1U-N4",
+    "ESP32-C3-MINI-1U-N4X",
+    "ESP32-C3-MINI-1U-H4",
+    "ESP32-C3-MINI-1U-H4X",
+    "ESP32-C3-WROOM-02-N4",
+    "ESP32-C3-WROOM-02-H4",
+    "ESP32-C3-WROOM-02U-N4",
+    "ESP32-C3-WROOM-02U-H4",
+    "ESP8685",
+    "ESP8685-WROOM-03-H2",
+    "ESP8685-WROOM-05-H2",
+    "ESP8685-WROOM-06-H2",
+    "ESP8685H4",
+    "ESP8685-WROOM-03-H4",
+    "ESP8685-WROOM-05-H4",
+    "ESP8685-WROOM-06-H4",
+    "ESP8685-WROOM-07-H2",
+    "ESP8685-WROOM-07-H4",
+    "ESP8685-WROOM-01-H2",
+    "ESP8685-WROOM-01-H4",
+    "ESP8685-WROOM-04-H2",
+    "ESP8685-WROOM-04-H4",
+    "ESP32-C3-WROOM-02-N8",
+    "ESP32-C3-WROOM-02U-N8",
+    "ESP32-C3-MINI-1-H4X"
+
+};}

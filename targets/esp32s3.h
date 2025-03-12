@@ -39,6 +39,7 @@ private:
 public:
     explicit Esp32S3(QObject *parent) : EspBase {parent} {}
     QString CHIP_NAME() {return "ESP32-S3";}
+    QVector<QString> CHIP_TARGETS();
 
     // STUB
     virtual uint32_t stub_entry() {return 1077381692;}

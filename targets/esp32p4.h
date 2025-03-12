@@ -20,7 +20,8 @@ private:
 
 public:
     explicit Esp32P4(QObject *parent) : EspBase {parent} {}
-    virtual QString CHIP_NAME() {return "ESP32-P4";}
+    QString CHIP_NAME() {return "ESP32-P4";}
+    QVector<QString> CHIP_TARGETS() {return {CHIP_NAME()};};
 
     // STUB
     virtual uint32_t stub_entry() {return 1341195718;}

@@ -19,7 +19,8 @@ protected:
 
 public:
     explicit Esp32C3(QObject *parent) : EspBase {parent} {}
-    virtual QString CHIP_NAME() {return "ESP32-C3";}
+    QString CHIP_NAME() {return "ESP32-C3";}
+    QVector<QString> CHIP_TARGETS();
 
     // This ROM address has a different value on each chip model
     virtual bool CHIP_COMPARE_MAGIC_VALUE(uint32_t x) { 

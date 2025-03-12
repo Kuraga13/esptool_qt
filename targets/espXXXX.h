@@ -20,7 +20,8 @@ private:
 
 public:
     explicit EspXXXX(QObject *parent) : EspBase {parent} {}
-    virtual QString CHIP_NAME() = 0; // {return "ESPXXXX";}
+    QString CHIP_NAME() = 0; // {return "ESPXXXX";}
+    QVector<QString> CHIP_TARGETS() {return {CHIP_NAME()};};
 
     // STUB
     virtual uint32_t stub_entry() = 0; // {return 0xXXXXXXXX;}

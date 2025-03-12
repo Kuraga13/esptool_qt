@@ -62,7 +62,8 @@ public:
 
     // esp_serial
     static std::vector<QString> getPorts();
-    std::vector<QString> getFamilies();
+    QVector<QString> getFamilies();
+    QVector<QString> getTargets(QString familie);
     void setPortName(QString);
     bool openPort();
     bool openPort(QString);
