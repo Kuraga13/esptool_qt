@@ -122,3 +122,7 @@ bool EspToolQt::getChipFeatures(QString* features) {
 uint32_t EspToolQt::getCrystalFrequency() {
     return target->get_crystal_freq((void*)this);
 }
+
+bool EspToolQt::getChipBaseMac(std::vector<uint8_t>* mac) {
+    return target->get_chip_base_mac(mac, (void*)this);
+}

@@ -262,6 +262,20 @@ bool EspToolQt::autoConnect(QString port) {
     getChipFeatures(&chip_features);
     qInfo().noquote() << "Features:" << chip_features;
 
+    // This function is implemented not for all families. Skip Mac if not implemented.
+    vector<uint8_t> mac;
+    getChipBaseMac(&mac);
+    if (mac.size() == 6) {
+        QString mac_string = QString("MAC: %1:%2:%3:%4:%5:%6")
+            .arg(QString::number(mac[0], 16).toUpper())
+            .arg(QString::number(mac[1], 16).toUpper())
+            .arg(QString::number(mac[2], 16).toUpper())
+            .arg(QString::number(mac[3], 16).toUpper())
+            .arg(QString::number(mac[4], 16).toUpper())
+            .arg(QString::number(mac[5], 16).toUpper());
+        qInfo() << mac_string;
+    }
+
     uint32_t CrystalFrequency = getCrystalFrequency();
     QString CrystalFrequencyStr = QString("Crystal is %1MHz").arg(QString::number(CrystalFrequency));
     qInfo().noquote() << CrystalFrequencyStr;

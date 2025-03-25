@@ -218,6 +218,25 @@ uint32_t Esp32S3::ESP_RAM_BLOCK(void* esp_tool) {
     return uses_otg ? USB_RAM_BLOCK : 1800;
 }
 
+bool Esp32S3::get_chip_base_mac(std::vector<uint8_t>* _mac, void* _esp_tool) {
+    EspToolQt* esp_tool = (EspToolQt*)_esp_tool;
+    std::vector<uint8_t> &mac = *_mac;
+
+    uint32_t MAC_EFUSE_REG = EFUSE_BASE + 0x044;
+    uint32_t mac0 = esp_tool->read_reg(MAC_EFUSE_REG);
+    uint32_t mac1 = esp_tool->read_reg(MAC_EFUSE_REG + 4);  // only bottom 16 bits are MAC
+
+    mac.clear();
+    mac.push_back(mac1 >>  8);
+    mac.push_back(mac1 >>  0);
+    mac.push_back(mac0 >> 24);
+    mac.push_back(mac0 >> 16);
+    mac.push_back(mac0 >>  8);
+    mac.push_back(mac0 >>  0);
+
+    return true;
+}
+
 QVector<QString> Esp32S3::CHIP_TARGETS() { return {
 
     "ESP32-S3",

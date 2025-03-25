@@ -57,6 +57,7 @@ public:
     virtual bool get_chip_description(QString* description, void* esp_tool) = 0;
     virtual bool get_chip_features(QString* features, void* esp_tool) = 0;
     virtual uint32_t get_crystal_freq(void* esp_tool) = 0;
+    virtual bool get_chip_base_mac(std::vector<uint8_t>* mac, void* esp_tool) {return false;}
 
     // helper function
     static std::vector<uint8_t> ba_to_vec(QByteArray ba) {

@@ -81,6 +81,7 @@ public:
     bool getChipDescription(QString* chip_description);
     bool getChipFeatures(QString* features);
     uint32_t getCrystalFrequency();
+    bool getChipBaseMac(std::vector<uint8_t>* mac); // This function is implemented not for all families.
 
     bool changeBaud(uint32_t baud = 460800);
     uint32_t getFlashSize();
