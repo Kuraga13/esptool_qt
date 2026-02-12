@@ -11,8 +11,7 @@
 #include <QTime>
 #include <QDebug>
 #include <QSerialPortInfo>
-#include "QtZlib/zconf.h"
-#include "QtZlib/zlib.h"
+#include <zlib.h>
 #include <QFile>
 
 #if defined(Q_OS_WIN32)

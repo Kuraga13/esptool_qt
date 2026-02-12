@@ -95,7 +95,7 @@ uint8_t EspToolQt::calculate_esp_checksum (const std::vector<uint8_t> &vec) {
 
 vector<uint8_t> EspToolQt::calculate_md5_hash (std::vector<uint8_t> &data) {
     QCryptographicHash hash_calc(QCryptographicHash::Md5);
-    hash_calc.addData(reinterpret_cast<const char*>(data.data()), data.size());
+    hash_calc.addData(QByteArrayView(reinterpret_cast<const char*>(data.data()), data.size()));
     QByteArray hash_qb = hash_calc.result();
     vector<uint8_t> hash;
     hash.insert(hash.end(), reinterpret_cast<uint8_t*>(hash_qb.begin()), reinterpret_cast<uint8_t*>(hash_qb.end()));
