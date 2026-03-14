@@ -245,7 +245,7 @@ bool EspToolQt::autoConnect(QString port) {
         }
     }
     if (x == 0) {
-        qInfo() << "[ERROR] Connection failed. Can't detectmine chip fammily.";
+        qInfo() << "[ERROR] Connection failed. Can't determine chip family.";
         return false;
     }
 
@@ -337,7 +337,7 @@ bool EspToolQt::changeBaud(uint32_t baud){
     // determine chip id
     uint32_t x = read_reg(0x40001000);
     if (target->CHIP_COMPARE_MAGIC_VALUE(x)) {
-        qInfo() << "[OK] Baudrate successfuly changed to" << serial->baudRate();
+        qInfo() << "[OK] Baudrate successfully changed to" << serial->baudRate();
         return true;
     } else {
         qInfo() << "[ERROR] Failed to set baudrate" << serial->baudRate();
