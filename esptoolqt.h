@@ -111,9 +111,11 @@ public:
 
     void progress(float);
     bool serial_progress_enabled = false;
+    bool progress_bytes_enabled  = false;
 
 signals:
     void progress_signal(int);
+    void progress_bytes_signal(quint64 current, quint64 total);
 };
 
 #endif // ESP_TOOL_QT_H

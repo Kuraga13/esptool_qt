@@ -567,6 +567,8 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
 
     while (received_data.size() < size) {
         progress((float)received_data.size() / (float)size * 100);
+        if (progress_bytes_enabled)
+            emit progress_bytes_signal(received_data.size(), size);
 
         vector<uint8_t> reply = serialReadOneFrame();
         if (reply.size() == 0) return zero;
@@ -799,7 +801,10 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
         }
 
         // update progress bar
-        emit progress_signal((offset + current_block_size) * 100 / total_length);
+        quint64 written = offset - memory_offset + current_block_size;
+        emit progress_signal(static_cast<int>(written * 100 / total_length));
+        if (progress_bytes_enabled)
+            emit progress_bytes_signal(written, static_cast<quint64>(total_length));
     }
 
     if (!upload_result) {
@@ -863,7 +868,10 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
         }
 
         // update progress bar
-        emit progress_signal((offset + current_block_size) * 100 / total_length);
+        quint64 verified = offset - memory_offset + current_block_size;
+        emit progress_signal(static_cast<int>(verified * 100 / total_length));
+        if (progress_bytes_enabled)
+            emit progress_bytes_signal(verified, static_cast<quint64>(total_length));
     }
     
     return verify_result;
