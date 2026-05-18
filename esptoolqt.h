@@ -88,7 +88,7 @@ public:
     void resetFromBoot();
     ResetStrategy resetStrategy = ResetStrategy::classic_reset;
 
-    // esp_serial
+    // serial
     static std::vector<QString> getPorts();
     QVector<QString> getFamilies();
     QVector<QString> getTargets(QString familie);

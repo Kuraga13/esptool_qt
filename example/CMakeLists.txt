@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets SerialPort)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets SerialPort)
+find_package(ZLIB REQUIRED)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -19,10 +20,39 @@ set(PROJECT_SOURCES
         mainwindow.ui
 )
 
+set(ESPTOOL_QT_SOURCES
+        ../esptoolqt.h
+        ../src/core.cpp
+        ../src/reset.cpp
+        ../src/serial.cpp
+        ../src/spi.cpp
+        ../src/defines.h
+        ../targets/esp_base.h
+        ../targets/esp8266.h
+        ../targets/esp8266.cpp
+        ../targets/esp32.h
+        ../targets/esp32.cpp
+        ../targets/esp32s2.h
+        ../targets/esp32s2.cpp
+        ../targets/esp32s3.h
+        ../targets/esp32s3.cpp
+        ../targets/esp32c2.h
+        ../targets/esp32c2.cpp
+        ../targets/esp32c3.h
+        ../targets/esp32c3.cpp
+        ../targets/esp32c6.h
+        ../targets/esp32c6.cpp
+        ../targets/esp32h2.h
+        ../targets/esp32h2.cpp
+        ../targets/esp32p4.h
+        ../targets/esp32p4.cpp
+)
+
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(01_RTS_DTR
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        ${ESPTOOL_QT_SOURCES}
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET 01_RTS_DTR APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -32,41 +62,19 @@ else()
     if(ANDROID)
         add_library(01_RTS_DTR SHARED
             ${PROJECT_SOURCES}
+            ${ESPTOOL_QT_SOURCES}
         )
 # Define properties for Android with Qt 5 after find_package() calls as:
 #    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(01_RTS_DTR
             ${PROJECT_SOURCES}
-            ../esptoolqt.h ../esptoolqt.cpp
-            ../esp_reset.cpp
-            ../esp_serial.cpp
-            ../esp_spi.cpp
-            ../espdefines.h
-            ../targets/esp_base.h
-            ../targets/esp8266.h
-            ../targets/esp8266.cpp
-            ../targets/esp32.h
-            ../targets/esp32.cpp
-            ../targets/esp32s2.h
-            ../targets/esp32s2.cpp
-            ../targets/esp32s3.h
-            ../targets/esp32s3.cpp
-            ../targets/esp32c2.h
-            ../targets/esp32c2.cpp
-            ../targets/esp32c3.h
-            ../targets/esp32c3.cpp
-            ../targets/esp32c6.h
-            ../targets/esp32c6.cpp
-            ../targets/esp32h2.h
-            ../targets/esp32h2.cpp
-            ../targets/esp32p4.h
-            ../targets/esp32p4.cpp
+            ${ESPTOOL_QT_SOURCES}
         )
     endif()
 endif()
 
-target_link_libraries(01_RTS_DTR PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::SerialPort)
+target_link_libraries(01_RTS_DTR PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::SerialPort ZLIB::ZLIB)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

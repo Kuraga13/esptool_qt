@@ -1,6 +1,6 @@
 /**
  ******************************************************************************
- * @file           : esp_serial.cpp
+ * @file           : src/serial.cpp
  * @brief          : Handles ESP bootloader serial flashing.
  * @author         : Kuraga Team
  ******************************************************************************
@@ -12,8 +12,8 @@
  ******************************************************************************
  */
 
-#include "esptoolqt.h"
-#include "espdefines.h"
+#include "../esptoolqt.h"
+#include "defines.h"
 #include <cmath>
 
 #include <QThread>

@@ -1,6 +1,6 @@
 /**
  ******************************************************************************
- * @file           : espdefines.h
+ * @file           : src/defines.h
  * @brief          : Defines ESP bootloader command IDs.
  * @author         : Kuraga Team
  ******************************************************************************
@@ -28,8 +28,8 @@
  ******************************************************************************
  */
 
-#ifndef ESPDEFINES_H
-#define ESPDEFINES_H
+#ifndef ESP_TOOL_QT_DEFINES_H
+#define ESP_TOOL_QT_DEFINES_H
 
 // Commands supported by ESP8266 ROM bootloader
 #define  ESP_FLASH_BEGIN      0x02
@@ -45,4 +45,4 @@
 #define  ESP_FLASH_DEFL_END   0x12
 #define  ESP_READ_REG         0x0A
 
-#endif // ESPDEFINES_H
+#endif // ESP_TOOL_QT_DEFINES_H

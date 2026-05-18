@@ -1,6 +1,6 @@
 /**
  ******************************************************************************
- * @file           : esptoolqt.cpp
+ * @file           : src/core.cpp
  * @brief          : Provides ESP tool core helpers.
  * @author         : Kuraga Team
  ******************************************************************************
@@ -12,7 +12,7 @@
  ******************************************************************************
  */
 
-#include "esptoolqt.h"
+#include "../esptoolqt.h"
 
 #include <QString>
 #include <QCryptographicHash>
@@ -22,17 +22,17 @@
 #include <map>
 #include <cmath>
 
-#include "espdefines.h"
-#include "targets/esp_base.h"
-#include "targets/esp8266.h"
-#include "targets/esp32.h"
-#include "targets/esp32s2.h"
-#include "targets/esp32s3.h"
-#include "targets/esp32c2.h"
-#include "targets/esp32c3.h"
-#include "targets/esp32c6.h"
-#include "targets/esp32h2.h"
-//#include "targets/esp32p4.h"
+#include "defines.h"
+#include "../targets/esp_base.h"
+#include "../targets/esp8266.h"
+#include "../targets/esp32.h"
+#include "../targets/esp32s2.h"
+#include "../targets/esp32s3.h"
+#include "../targets/esp32c2.h"
+#include "../targets/esp32c3.h"
+#include "../targets/esp32c6.h"
+#include "../targets/esp32h2.h"
+//#include "../targets/esp32p4.h"
 
 using std::vector;
 using std::string;

@@ -1,6 +1,6 @@
 /**
  ******************************************************************************
- * @file           : esp_spi.cpp
+ * @file           : src/spi.cpp
  * @brief          : Runs ESP SPI flash commands.
  * @author         : Kuraga Team
  ******************************************************************************
@@ -12,12 +12,12 @@
  ******************************************************************************
  */
 
-#include "esptoolqt.h"
+#include "../esptoolqt.h"
 
 #include "QDebug"
-#include "targets/esp_base.h"
-#include "targets/esp32.h"
-#include "targets/esp32s3.h"
+#include "../targets/esp_base.h"
+#include "../targets/esp32.h"
+#include "../targets/esp32s3.h"
 
 using std::vector;
 
