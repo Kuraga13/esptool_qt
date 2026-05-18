@@ -1,6 +1,15 @@
-/*  Copyright (C) 2024 Kuraga Tech
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 3.
+/**
+ ******************************************************************************
+ * @file           : esp32p4.cpp
+ * @brief          : Implements ESP32-P4 chip support.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
  */
 
 #include "esp32p4.h"

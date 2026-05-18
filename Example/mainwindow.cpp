@@ -1,3 +1,17 @@
+/**
+ ******************************************************************************
+ * @file           : mainwindow.cpp
+ * @brief          : Implements the example main window.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ */
+
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 

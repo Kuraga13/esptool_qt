@@ -1,6 +1,34 @@
-/*  Copyright (C) 2024 Kuraga Tech
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 3.
+/**
+ ******************************************************************************
+ * @file           : esptoolqt.h
+ * @brief          : Declares the ESP flashing Qt interface.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ * @details
+ *
+ * Provides the QObject based API used to communicate with Espressif ROM
+ * bootloaders, upload stubs, read chip data, and flash firmware images.
+ *
+ * Features:
+ * - Serial port discovery, opening, and bootloader connection helpers
+ * - ESP target selection, chip information, and reset handling
+ * - Flash read, write, verification, and progress reporting APIs
+ *
+ * Usage Example:
+ * ```cpp
+ * EspToolQt tool;
+ * if (tool.autoConnect("COM3")) {
+ *     tool.flashUpload(0x10000, firmware);
+ * }
+ * ```
+ *
+ ******************************************************************************
  */
 
 #ifndef ESP_TOOL_QT_H

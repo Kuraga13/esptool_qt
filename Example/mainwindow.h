@@ -1,3 +1,34 @@
+/**
+ ******************************************************************************
+ * @file           : mainwindow.h
+ * @brief          : Declares the example main window.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ * @details
+ *
+ * Declares a Qt example window that exposes EspToolQt actions for reset,
+ * connection, flash reads, and flash writes from UI button handlers.
+ *
+ * Features:
+ * - Owns an EspToolQt instance for example operations
+ * - Provides slots for reset and connection buttons
+ * - Provides slots for flash read and write tests
+ *
+ * Usage Example:
+ * ```cpp
+ * MainWindow window;
+ * window.show();
+ * ```
+ *
+ ******************************************************************************
+ */
+
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 

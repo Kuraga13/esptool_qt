@@ -1,6 +1,33 @@
-/*  Copyright (C) 2024 Kuraga Tech
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 3.
+/**
+ ******************************************************************************
+ * @file           : esp_base.h
+ * @brief          : Declares the ESP target base class.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ * @details
+ *
+ * Defines the common interface implemented by all Espressif target classes.
+ * The interface supplies chip detection, stub upload data, SPI registers,
+ * efuse access, and chip information callbacks used by EspToolQt.
+ *
+ * Features:
+ * - Abstract target metadata and detection API
+ * - Stub, SPI, efuse, and flash geometry hooks
+ * - Shared QByteArray to std::vector conversion helper
+ *
+ * Usage Example:
+ * ```cpp
+ * std::vector<EspBase*> targets;
+ * targets.push_back(new Esp32(nullptr));
+ * ```
+ *
+ ******************************************************************************
  */
 
 #ifndef ESP_BASE_H

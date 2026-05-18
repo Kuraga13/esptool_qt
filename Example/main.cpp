@@ -1,3 +1,17 @@
+/**
+ ******************************************************************************
+ * @file           : main.cpp
+ * @brief          : Starts the ESP tool example app.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ */
+
 #include "mainwindow.h"
 
 #include <QApplication>

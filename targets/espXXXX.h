@@ -1,6 +1,33 @@
-/*  Copyright (C) 2024 Kuraga Tech
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 3.
+/**
+ ******************************************************************************
+ * @file           : espXXXX.h
+ * @brief          : Provides a template ESP target class.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ * @details
+ *
+ * Provides placeholder declarations for adding a new Espressif target class.
+ * The template mirrors the target interface used by concrete chip families.
+ *
+ * Features:
+ * - Chip detection, stub, SPI, and efuse placeholders
+ * - Default target-name list helper
+ * - Chip description, feature, and crystal callbacks
+ *
+ * Usage Example:
+ * ```cpp
+ * class EspNewChip : public EspXXXX {
+ *     // Implement target-specific overrides.
+ * };
+ * ```
+ *
+ ******************************************************************************
  */
 
 #ifndef ESP_XXXX_H

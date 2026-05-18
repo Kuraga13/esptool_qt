@@ -1,3 +1,33 @@
+/**
+ ******************************************************************************
+ * @file           : espdefines.h
+ * @brief          : Defines ESP bootloader command IDs.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ * @details
+ *
+ * Lists command identifiers used by the Espressif ROM bootloader protocol.
+ * The values are shared by serial, memory, and flash transfer routines.
+ *
+ * Features:
+ * - ROM flash and memory transfer command constants
+ * - Sync, register read, and register write command constants
+ * - Deflated flash command constants for compressed transfers
+ *
+ * Usage Example:
+ * ```cpp
+ * std::vector<uint8_t> packet = slip_encode(ESP_SYNC, syncData);
+ * ```
+ *
+ ******************************************************************************
+ */
+
 #ifndef ESPDEFINES_H
 #define ESPDEFINES_H
 

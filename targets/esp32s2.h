@@ -1,6 +1,32 @@
-/*  Copyright (C) 2024 Kuraga Tech
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 3.
+/**
+ ******************************************************************************
+ * @file           : esp32s2.h
+ * @brief          : Declares ESP32-S2 target support.
+ * @author         : Kuraga Team
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2026 Kuraga Tech
+ * SPDX-License-Identifier: MIT
+ *
+ ******************************************************************************
+ * @details
+ *
+ * Defines target metadata, flasher stubs, register addresses, and chip
+ * information callbacks for ESP32-S2 based devices.
+ *
+ * Features:
+ * - ESP32-S2 ROM detection and supported module names
+ * - Embedded RAM stub text and data payloads
+ * - USB-OTG RAM block, SPI, efuse, and crystal hooks
+ *
+ * Usage Example:
+ * ```cpp
+ * Esp32S2 target(nullptr);
+ * QString name = target.CHIP_NAME();
+ * ```
+ *
+ ******************************************************************************
  */
 
 #ifndef ESP_Esp32S2_H
