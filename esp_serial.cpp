@@ -160,6 +160,7 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
 
 bool EspToolQt::autoConnect(QString port) {
     esp_target_info.connected = false;
+    target = NULL;
     closePort(); // close port if it was opened
 
     const vector<uint8_t> sync_sequence_data = {
@@ -233,6 +234,8 @@ bool EspToolQt::autoConnect(QString port) {
     uint32_t x = read_reg(0x40001000);
     if (x == 0) {
         qInfo() << "[ERROR] Connection failed. Can't read target id.";
+        closePort();
+        target = NULL;
         return false;
     }
 
@@ -244,14 +247,25 @@ bool EspToolQt::autoConnect(QString port) {
             break;
         }
     }
-    if (x == 0) {
-        qInfo() << "[ERROR] Connection failed. Can't determine chip family.";
+    if (target == NULL) {
+        qInfo() << "[ERROR] Connection failed. Can't determine chip family. Unknown chip id:"
+                << Qt::hex << x;
+        closePort();
+        target = NULL;
         return false;
     }
 
-    stubUpload();
+    if (!stubUpload()) {
+        closePort();
+        target = NULL;
+        return false;
+    }
 
-    changeBaud();
+    if (!changeBaud()) {
+        closePort();
+        target = NULL;
+        return false;
+    }
 
     QString chip_description;
     getChipDescription(&chip_description);
@@ -548,7 +562,7 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     vector<uint8_t> zero;
 
     // check that target is connected
-    if (target == NULL || serial == NULL) {
+    if (target == NULL || serial == NULL || !serial->isOpen()) {
         qInfo() << "[Error] Target is not connected";
         return zero;
     }
@@ -736,7 +750,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     bool upload_result;
 
     // check that target is connected
-    if (target == NULL || serial == NULL) {
+    if (target == NULL || serial == NULL || !serial->isOpen()) {
         qInfo() << "[Error] Target is not connected";
         return false;
     }
