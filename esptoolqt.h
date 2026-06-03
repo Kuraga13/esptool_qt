@@ -36,6 +36,7 @@
 
 #include <QObject>
 #include <QSerialPort>
+#include <atomic>
 #include <vector>
 #include "targets/esp_base.h"
 
@@ -81,6 +82,7 @@ public:
     std::vector<EspBase*> available_targets;
     EspBase* target = NULL;
     EspTargetInfo esp_target_info;
+    std::atomic<bool> cancel_requested{false};
 
     struct SlipReply {bool valid = false; uint8_t command = 0; uint32_t value = 0; std::vector<uint8_t> data;};
 
@@ -102,6 +104,9 @@ public:
     std::vector<uint8_t> serialReadOneFrame(int timeout_ms = 1000);
     bool autoConnect(QString port = NULL);
     bool autoConnect(QString port, uint32_t baud);
+    void requestCancel() { cancel_requested.store(true); }
+    void clearCancel() { cancel_requested.store(false); }
+    bool isCancelled() const { return cancel_requested.load(); }
 
     // stub upload
     bool stubUpload();

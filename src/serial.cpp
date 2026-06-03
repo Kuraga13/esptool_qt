@@ -202,14 +202,26 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     QString found_port;
 
     for (auto port = ports.rbegin(); port < ports.rend(); port++) {
+        if (isCancelled()) {
+            closePort();
+            return false;
+        }
 
         for (auto reset : resets){
+            if (isCancelled()) {
+                closePort();
+                return false;
+            }
             qInfo() << "Try" << *port << "reset_strategy" << reset;
             bool port_opened = openPort(*port,115200);
             if (port_opened) {
                 resetToBoot(reset);
 
                 for (int i = 0; i < 4; i++) {
+                    if (isCancelled()) {
+                        closePort();
+                        return false;
+                    }
                     serialWrite(sync_sequence, 50);
                     vector<uint8_t> data = serialRead(50);
 
@@ -269,6 +281,11 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     }
 
     if (!stubUpload()) {
+        closePort();
+        target = NULL;
+        return false;
+    }
+    if (isCancelled()) {
         closePort();
         target = NULL;
         return false;
@@ -537,6 +554,7 @@ bool EspToolQt::mem_data(vector<uint8_t> data, uint32_t max_packet_size) {
     tmp_vec.reserve(max_packet_size);
     uint32_t frame_n = 0;
     for (uint32_t i = 0; i < data.size(); i++) {
+        if (isCancelled()) return false;
         tmp_vec.push_back(data[i]);
         if (tmp_vec.size() >= max_packet_size) {
             if (!mem_data_one_block(frame_n, tmp_vec)) {
@@ -593,6 +611,7 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     if (reply.size() == 0) return zero;
 
     while (received_data.size() < size) {
+        if (isCancelled()) return zero;
         progress((float)received_data.size() / (float)size * 100);
         if (progress_bytes_enabled)
             emit progress_bytes_signal(received_data.size(), size);
@@ -697,6 +716,7 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
     tmp_vec.reserve(max_packet_size);
     uint32_t frame_n = 0;
     for (uint32_t i = 0; i < upload.size(); i++) {
+        if (isCancelled()) return false;
         tmp_vec.push_back(upload[i]);
         if (tmp_vec.size() >= max_packet_size) {
             if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
@@ -794,6 +814,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
     // upload data block by block
     for(int offset = memory_offset; offset < memory_offset + total_length; offset += block_size) {
+        if (isCancelled()) return false;
         // amount of data left to write
         int data_left = (total_length - (offset - memory_offset));
         
@@ -812,6 +833,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
         // write block in 3 attempts;
         for(int attempt = 0; attempt < 3; attempt++) {
+            if (isCancelled()) return false;
             if (attempt != 0) qInfo() << "Retry data block";
             upload_result = flashData(offset, block, compressed);
             if (upload_result == true) {
@@ -864,6 +886,7 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     #endif // ESP_TOOL_VERIFY_DEBUG
 
     for(int offset = memory_offset; offset < memory_offset + total_length; offset += block_size) {
+        if (isCancelled()) return false;
         // amount of data left to verify
         int data_left = total_length - (offset - memory_offset);
         
@@ -882,6 +905,7 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
 
         // verify block in 3 attempts;
         for(int attempt = 0; attempt < 3; attempt++) {
+            if (isCancelled()) return false;
             if (attempt != 0) qInfo() << "Retry to verify data block";
             verify_result = verifyFlashPr(offset, block);
             if (verify_result == true) break;
