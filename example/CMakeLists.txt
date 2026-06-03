@@ -26,6 +26,8 @@ set(ESPTOOL_QT_SOURCES
         ../src/reset.cpp
         ../src/serial.cpp
         ../src/spi.cpp
+        ../read_agent/esp_read_agent.cpp
+        ../read_agent/esp_read_agent.h
         ../src/defines.h
         ../targets/esp_base.h
         ../targets/esp8266.h

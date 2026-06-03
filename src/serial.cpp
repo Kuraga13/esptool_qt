@@ -13,6 +13,7 @@
  */
 
 #include "../esptoolqt.h"
+#include "../read_agent/esp_read_agent.h"
 #include "defines.h"
 #include <cmath>
 
@@ -755,6 +756,7 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
 
     progress(100);
     int duration = start.msecsTo(QTime::currentTime());
+    if (duration <= 0) duration = 1;
 
     vector<uint8_t> md5_from_esp = serialReadOneFrame();
     if (isCancelled()) {
@@ -777,6 +779,11 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     qInfo() << "[OK] Effective read speed [kbit/s]:" << speed;
 
     return received_data;
+}
+
+std::vector<uint8_t> EspToolQt::readFlashWithAgent(uint32_t offset, uint32_t size) {
+    EspReadAgentRunner runner(this);
+    return runner.readFlash(offset, size);
 }
 
 bool EspToolQt::flashBegin(uint32_t size_of_data, uint32_t number_of_data_packets, uint32_t max_packet_size, uint32_t memory_offset, bool compressed) {
@@ -1000,6 +1007,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
     // get duration of write for speed test
     int duration = start.msecsTo(QTime::currentTime());
+    if (duration <= 0) duration = 1;
     float speed = ((float)data.size() * 8 / 1000) / ((float)duration / 1000);
     qInfo() << "[OK] Effective speed [kbit/s]:" << speed;
     return true;

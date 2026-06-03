@@ -139,6 +139,7 @@ public:
 
     // read flash
     std::vector<uint8_t> readFlash(uint32_t memory_offset, uint32_t size);
+    std::vector<uint8_t> readFlashWithAgent(uint32_t memory_offset, uint32_t size);
 
     // write flash
     bool flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed = true);
