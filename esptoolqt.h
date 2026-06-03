@@ -99,6 +99,9 @@ public:
     bool openPort(QString);
     bool openPort(QString port, int baud);
     void closePort();
+    bool isSerialUsable() const;
+    bool hasSerialError() const;
+    QString serialErrorString() const;
     bool serialWrite(std::vector<uint8_t>, int timeout_ms = 1000);
     std::vector<uint8_t> serialRead(int timeout_ms = 1000);
     std::vector<uint8_t> serialReadOneFrame(int timeout_ms = 1000);

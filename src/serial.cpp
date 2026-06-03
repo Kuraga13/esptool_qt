@@ -70,7 +70,13 @@ void EspToolQt::setPortName(QString name) {
 }
 
 bool EspToolQt::openPort() {
-    return serial->open(QIODevice::ReadWrite);
+    if (serial == NULL) return false;
+    serial->clearError();
+    const bool opened = serial->open(QIODevice::ReadWrite);
+    if (!opened) {
+        qInfo() << "[ERROR] Can't open serial port:" << serialErrorString();
+    }
+    return opened;
 }
 
 bool EspToolQt::openPort(QString port) {
@@ -84,25 +90,78 @@ bool EspToolQt::openPort(QString port, int baud) {
 }
 
 void EspToolQt::closePort() {
+    if (serial == NULL) return;
     serial->close();
     esp_target_info.connected = false;
 }
 
+bool EspToolQt::hasSerialError() const {
+    if (serial == NULL) return true;
+    switch (serial->error()) {
+    case QSerialPort::NoError:
+    case QSerialPort::TimeoutError:
+        return false;
+    default:
+        return true;
+    }
+}
+
+bool EspToolQt::isSerialUsable() const {
+    return serial != NULL && serial->isOpen() && !hasSerialError();
+}
+
+QString EspToolQt::serialErrorString() const {
+    if (serial == NULL) return QStringLiteral("Serial port is not initialized");
+    return serial->errorString();
+}
+
 bool EspToolQt::serialWrite(vector<uint8_t> data, int timeout_ms) {
+    if (!isSerialUsable()) {
+        qInfo() << "[ERROR] Serial port is not usable before write:" << serialErrorString();
+        closePort();
+        return false;
+    }
     serial->clear();
-    serial->write(reinterpret_cast<const char*>(data.data()), data.size());
-    return serial->waitForBytesWritten(timeout_ms);
+    const qint64 written = serial->write(reinterpret_cast<const char*>(data.data()), data.size());
+    if (written < 0) {
+        qInfo() << "[ERROR] Serial write failed:" << serialErrorString();
+        closePort();
+        return false;
+    }
+    if (!serial->waitForBytesWritten(timeout_ms)) {
+        if (!serial->isOpen() || hasSerialError()) {
+            qInfo() << "[ERROR] Serial write wait failed:" << serialErrorString();
+            closePort();
+        }
+        return false;
+    }
+    return true;
 }
 
 vector<uint8_t> EspToolQt::serialRead(int timeout_ms) {
     QTime timeout = QTime::currentTime().addMSecs(timeout_ms);
     vector<uint8_t> data;
 
+    if (!isSerialUsable()) {
+        qInfo() << "[ERROR] Serial port is not usable before read:" << serialErrorString();
+        closePort();
+        return data;
+    }
+
     while(QTime::currentTime().msecsTo(timeout) > 0)
     {
         if (isCancelled()) return data;
-        serial->waitForReadyRead(5);
+        if (!serial->waitForReadyRead(5) && (!serial->isOpen() || hasSerialError())) {
+            qInfo() << "[ERROR] Serial read wait failed:" << serialErrorString();
+            closePort();
+            return data;
+        }
         QByteArray byte_array = serial->readAll();
+        if (!serial->isOpen() || hasSerialError()) {
+            qInfo() << "[ERROR] Serial read failed:" << serialErrorString();
+            closePort();
+            return data;
+        }
         if ((byte_array.size() == 0) && (data.size() != 0)) break;
         data.insert(data.end(), reinterpret_cast<uint8_t*>(byte_array.begin()), reinterpret_cast<uint8_t*>(byte_array.end()));
     }
@@ -117,13 +176,28 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
     bool frame_started = false;
     bool escape_started = false;
 
+    if (!isSerialUsable()) {
+        qInfo() << "[ERROR] Serial port is not usable before frame read:" << serialErrorString();
+        closePort();
+        return zero;
+    }
+
     while(QTime::currentTime().msecsTo(timeout) > 0)
     {
         if (isCancelled()) return zero;
-        serial->waitForReadyRead(1);
+        if (!serial->waitForReadyRead(1) && (!serial->isOpen() || hasSerialError())) {
+            qInfo() << "[ERROR] Serial frame wait failed:" << serialErrorString();
+            closePort();
+            return zero;
+        }
         while(QTime::currentTime().msecsTo(timeout) > 0){
             if (isCancelled()) return zero;
             QByteArray one_byte = serial->read(1);
+            if (!serial->isOpen() || hasSerialError()) {
+                qInfo() << "[ERROR] Serial frame read failed:" << serialErrorString();
+                closePort();
+                return zero;
+            }
             if (one_byte.size() == 0) break;
             uint8_t byte = one_byte.at(0);
 
