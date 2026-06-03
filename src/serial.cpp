@@ -85,6 +85,7 @@ bool EspToolQt::openPort(QString port, int baud) {
 
 void EspToolQt::closePort() {
     serial->close();
+    esp_target_info.connected = false;
 }
 
 bool EspToolQt::serialWrite(vector<uint8_t> data, int timeout_ms) {
@@ -99,6 +100,7 @@ vector<uint8_t> EspToolQt::serialRead(int timeout_ms) {
 
     while(QTime::currentTime().msecsTo(timeout) > 0)
     {
+        if (isCancelled()) return data;
         serial->waitForReadyRead(5);
         QByteArray byte_array = serial->readAll();
         if ((byte_array.size() == 0) && (data.size() != 0)) break;
@@ -117,8 +119,10 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
 
     while(QTime::currentTime().msecsTo(timeout) > 0)
     {
+        if (isCancelled()) return zero;
         serial->waitForReadyRead(1);
         while(QTime::currentTime().msecsTo(timeout) > 0){
+            if (isCancelled()) return zero;
             QByteArray one_byte = serial->read(1);
             if (one_byte.size() == 0) break;
             uint8_t byte = one_byte.at(0);
@@ -224,6 +228,10 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
                     }
                     serialWrite(sync_sequence, 50);
                     vector<uint8_t> data = serialRead(50);
+                    if (isCancelled()) {
+                        closePort();
+                        return false;
+                    }
 
                     if (data.size() > 50){
                         done = true;
@@ -254,6 +262,11 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
 
     // clean rx buffer
     serialRead(200);
+    if (isCancelled()) {
+        closePort();
+        target = NULL;
+        return false;
+    }
 
     // determine chip id
     uint32_t x = read_reg(0x40001000);
@@ -374,6 +387,10 @@ bool EspToolQt::changeBaud(uint32_t baud){
     vector<uint8_t> packet = slip_encode(0x0f, data_field);
     serialWrite(packet);
     vector<uint8_t> reply = serialReadOneFrame();
+    if (isCancelled()) {
+        closePort();
+        return false;
+    }
     serial->setBaudRate(baud);
     QObject().thread()->msleep(50);
     serial->clear();
@@ -390,7 +407,7 @@ bool EspToolQt::changeBaud(uint32_t baud){
 }
 
 void EspToolQt::disconnect() {
-    serial->close();
+    closePort();
     qInfo() << "Serial port closed";
 }
 
@@ -433,6 +450,10 @@ bool EspToolQt::slipCommandSend (uint8_t command, std::vector<uint8_t>data_field
     vector<uint8_t> packet = slip_encode(command, data_field, checksum);
     serialWrite(packet);
     vector<uint8_t> reply = serialReadOneFrame(timeout_ms);
+    if (isCancelled()) {
+        closePort();
+        return false;
+    }
     SlipReply slip_reply = slip_parse(reply);
     if (slip_reply.valid && slip_reply.command == command && slip_reply.data[0] == 0)
     {
@@ -516,6 +537,10 @@ bool EspToolQt::mem_begin(uint32_t size_of_data, uint32_t memory_offset, uint32_
     vector<uint8_t> packet = slip_encode(ESP_MEM_BEGIN, data_field);
     serialWrite(packet);
     vector<uint8_t> reply = serialReadOneFrame();
+    if (isCancelled()) {
+        closePort();
+        return false;
+    }
     SlipReply slip_reply = slip_parse(reply);
     if (slip_reply.valid && slip_reply.command == ESP_MEM_BEGIN && slip_reply.data[0] == 0)
     {
@@ -538,6 +563,10 @@ bool EspToolQt::mem_data_one_block(uint32_t sequence_number, const vector<uint8_
     vector<uint8_t> packet = slip_encode(ESP_MEM_DATA, data_field, checksum);
     serialWrite(packet);
     vector<uint8_t> reply = serialReadOneFrame();
+    if (isCancelled()) {
+        closePort();
+        return false;
+    }
     SlipReply slip_reply = slip_parse(reply);
     if (slip_reply.valid && slip_reply.command == ESP_MEM_DATA && slip_reply.data[0] == 0)
     {
@@ -554,7 +583,10 @@ bool EspToolQt::mem_data(vector<uint8_t> data, uint32_t max_packet_size) {
     tmp_vec.reserve(max_packet_size);
     uint32_t frame_n = 0;
     for (uint32_t i = 0; i < data.size(); i++) {
-        if (isCancelled()) return false;
+        if (isCancelled()) {
+            closePort();
+            return false;
+        }
         tmp_vec.push_back(data[i]);
         if (tmp_vec.size() >= max_packet_size) {
             if (!mem_data_one_block(frame_n, tmp_vec)) {
@@ -582,6 +614,10 @@ bool EspToolQt::mem_end(uint32_t entry_address) {
     if (!slipCommandSend(ESP_MEM_END, data_field)) return false;
 
     vector<uint8_t> ohai = serialReadOneFrame();
+    if (isCancelled()) {
+        closePort();
+        return false;
+    }
     vector<uint8_t> expected_ohai = {0x4F, 0x48, 0x41, 0x49};
     return (ohai == expected_ohai);
 }
@@ -608,15 +644,26 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     vector<uint8_t> packet = slip_encode(0xD2, data_field);
     serialWrite(packet);
     vector<uint8_t> reply = serialReadOneFrame(); // read reply to command
+    if (isCancelled()) {
+        closePort();
+        return zero;
+    }
     if (reply.size() == 0) return zero;
 
     while (received_data.size() < size) {
-        if (isCancelled()) return zero;
+        if (isCancelled()) {
+            closePort();
+            return zero;
+        }
         progress((float)received_data.size() / (float)size * 100);
         if (progress_bytes_enabled)
             emit progress_bytes_signal(received_data.size(), size);
 
         vector<uint8_t> reply = serialReadOneFrame();
+        if (isCancelled()) {
+            closePort();
+            return zero;
+        }
         if (reply.size() == 0) return zero;
 
         received_data.insert(received_data.end(), reply.begin(), reply.end());
@@ -636,6 +683,10 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     int duration = start.msecsTo(QTime::currentTime());
 
     vector<uint8_t> md5_from_esp = serialReadOneFrame();
+    if (isCancelled()) {
+        closePort();
+        return zero;
+    }
     // qInfo() << "md5_from_esp" << Qt::hex << md5_from_esp;
 
     vector<uint8_t> md5_calculated = calculate_md5_hash(received_data);
@@ -716,7 +767,10 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
     tmp_vec.reserve(max_packet_size);
     uint32_t frame_n = 0;
     for (uint32_t i = 0; i < upload.size(); i++) {
-        if (isCancelled()) return false;
+        if (isCancelled()) {
+            closePort();
+            return false;
+        }
         tmp_vec.push_back(upload[i]);
         if (tmp_vec.size() >= max_packet_size) {
             if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
@@ -752,6 +806,10 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
     serialWrite(md5_read_command_frame);
     // read reply with custom timeout. md5 calculation takes some time
     vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
+    if (isCancelled()) {
+        closePort();
+        return false;
+    }
     SlipReply slip_reply = slip_parse(reply);
 
     // check that we have successfully read md5 from device
@@ -780,7 +838,7 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
 // #define ESP_TOOL_UPLOAD_DEBUG
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
-    bool upload_result;
+    bool upload_result = true;
 
     // check that target is connected
     if (target == NULL || serial == NULL || !serial->isOpen()) {
@@ -814,7 +872,10 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
     // upload data block by block
     for(int offset = memory_offset; offset < memory_offset + total_length; offset += block_size) {
-        if (isCancelled()) return false;
+        if (isCancelled()) {
+            closePort();
+            return false;
+        }
         // amount of data left to write
         int data_left = (total_length - (offset - memory_offset));
         
@@ -833,7 +894,10 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
         // write block in 3 attempts;
         for(int attempt = 0; attempt < 3; attempt++) {
-            if (isCancelled()) return false;
+            if (isCancelled()) {
+                closePort();
+                return false;
+            }
             if (attempt != 0) qInfo() << "Retry data block";
             upload_result = flashData(offset, block, compressed);
             if (upload_result == true) {
@@ -869,7 +933,7 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
 // #define ESP_TOOL_VERIFY_DEBUG
 bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
-    bool verify_result;
+    bool verify_result = true;
     
     // split data in 100 blocks
     int total_length = data.size();
@@ -886,7 +950,10 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
     #endif // ESP_TOOL_VERIFY_DEBUG
 
     for(int offset = memory_offset; offset < memory_offset + total_length; offset += block_size) {
-        if (isCancelled()) return false;
+        if (isCancelled()) {
+            closePort();
+            return false;
+        }
         // amount of data left to verify
         int data_left = total_length - (offset - memory_offset);
         
@@ -905,7 +972,10 @@ bool EspToolQt::verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data) {
 
         // verify block in 3 attempts;
         for(int attempt = 0; attempt < 3; attempt++) {
-            if (isCancelled()) return false;
+            if (isCancelled()) {
+                closePort();
+                return false;
+            }
             if (attempt != 0) qInfo() << "Retry to verify data block";
             verify_result = verifyFlashPr(offset, block);
             if (verify_result == true) break;
