@@ -168,6 +168,10 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
 }
 
 bool EspToolQt::autoConnect(QString port) {
+    return autoConnect(port, 460800);
+}
+
+bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     esp_target_info.connected = false;
     target = NULL;
     closePort(); // close port if it was opened
@@ -270,7 +274,7 @@ bool EspToolQt::autoConnect(QString port) {
         return false;
     }
 
-    if (!changeBaud()) {
+    if (!changeBaud(baud)) {
         closePort();
         target = NULL;
         return false;
@@ -353,7 +357,7 @@ bool EspToolQt::changeBaud(uint32_t baud){
     vector<uint8_t> packet = slip_encode(0x0f, data_field);
     serialWrite(packet);
     vector<uint8_t> reply = serialReadOneFrame();
-    serial->setBaudRate(460800);
+    serial->setBaudRate(baud);
     QObject().thread()->msleep(50);
     serial->clear();
 

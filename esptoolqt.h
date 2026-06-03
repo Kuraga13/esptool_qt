@@ -101,6 +101,7 @@ public:
     std::vector<uint8_t> serialRead(int timeout_ms = 1000);
     std::vector<uint8_t> serialReadOneFrame(int timeout_ms = 1000);
     bool autoConnect(QString port = NULL);
+    bool autoConnect(QString port, uint32_t baud);
 
     // stub upload
     bool stubUpload();
