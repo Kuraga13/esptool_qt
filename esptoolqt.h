@@ -110,6 +110,8 @@ public:
     void requestCancel() { cancel_requested.store(true); }
     void clearCancel() { cancel_requested.store(false); }
     bool isCancelled() const { return cancel_requested.load(); }
+    static void setDiagEnabled(bool enabled);
+    static bool isDiagEnabled();
 
     // stub upload
     bool stubUpload();

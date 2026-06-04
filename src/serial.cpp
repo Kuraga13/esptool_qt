@@ -24,6 +24,8 @@
 #include <zlib.h>
 #include <QFile>
 
+#include <atomic>
+
 #if defined(Q_OS_WIN32)
 #  include <qt_windows.h>
 #endif
@@ -31,6 +33,24 @@
 using std::vector;
 using std::ceil;
 using SlipReply = EspToolQt::SlipReply;
+
+namespace {
+std::atomic<bool> g_esp_diag_enabled{false};
+
+double kbitPerSecond(quint64 bytes, int duration_ms)
+{
+    if (duration_ms <= 0) duration_ms = 1;
+    return (static_cast<double>(bytes) * 8.0 / 1000.0) / (static_cast<double>(duration_ms) / 1000.0);
+}
+}
+
+void EspToolQt::setDiagEnabled(bool enabled) {
+    g_esp_diag_enabled.store(enabled);
+}
+
+bool EspToolQt::isDiagEnabled() {
+    return g_esp_diag_enabled.load();
+}
 
 QVector<QString> EspToolQt::getFamilies() {
     QVector<QString> families;
@@ -699,6 +719,15 @@ bool EspToolQt::mem_end(uint32_t entry_address) {
 
 std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     QTime start = QTime::currentTime();
+    const bool diag = isDiagEnabled();
+    int command_reply_ms = 0;
+    int data_frames_ms = 0;
+    int ack_send_ms = 0;
+    int md5_frame_ms = 0;
+    int host_md5_ms = 0;
+    quint64 frame_count = 0;
+    quint64 ack_count = 0;
+    quint64 payload_bytes = 0;
 
     vector<uint8_t> received_data;
     vector<uint8_t> zero;
@@ -718,7 +747,9 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
     appendU32(&data_field, (uint32_t)1);
     vector<uint8_t> packet = slip_encode(0xD2, data_field);
     serialWrite(packet);
+    QTime lap = QTime::currentTime();
     vector<uint8_t> reply = serialReadOneFrame(); // read reply to command
+    command_reply_ms = lap.msecsTo(QTime::currentTime());
     if (isCancelled()) {
         closePort();
         return zero;
@@ -734,12 +765,16 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
         if (progress_bytes_enabled)
             emit progress_bytes_signal(received_data.size(), size);
 
+        lap = QTime::currentTime();
         vector<uint8_t> reply = serialReadOneFrame();
+        data_frames_ms += lap.msecsTo(QTime::currentTime());
         if (isCancelled()) {
             closePort();
             return zero;
         }
         if (reply.size() == 0) return zero;
+        frame_count++;
+        payload_bytes += static_cast<quint64>(reply.size());
 
         received_data.insert(received_data.end(), reply.begin(), reply.end());
 
@@ -751,21 +786,28 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
 
         vector<uint8_t> ack;
         appendU32(&ack, received_data.size());
+        lap = QTime::currentTime();
         slip_raw_send(ack);
+        ack_send_ms += lap.msecsTo(QTime::currentTime());
+        ack_count++;
     }
 
     progress(100);
-    int duration = start.msecsTo(QTime::currentTime());
-    if (duration <= 0) duration = 1;
+    int transfer_ms = start.msecsTo(QTime::currentTime());
+    if (transfer_ms <= 0) transfer_ms = 1;
 
+    lap = QTime::currentTime();
     vector<uint8_t> md5_from_esp = serialReadOneFrame();
+    md5_frame_ms = lap.msecsTo(QTime::currentTime());
     if (isCancelled()) {
         closePort();
         return zero;
     }
     // qInfo() << "md5_from_esp" << Qt::hex << md5_from_esp;
 
+    lap = QTime::currentTime();
     vector<uint8_t> md5_calculated = calculate_md5_hash(received_data);
+    host_md5_ms = lap.msecsTo(QTime::currentTime());
     // qInfo() << "md5_calculated" << Qt::hex << md5_calculated;
 
     if (md5_from_esp == md5_calculated) {
@@ -775,8 +817,28 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
         return zero;
     }
 
-    float speed = ((float)received_data.size() * 8 / 1000) / ((float)duration / 1000);
+    int total_ms = start.msecsTo(QTime::currentTime());
+    if (total_ms <= 0) total_ms = 1;
+    float speed = ((float)received_data.size() * 8 / 1000) / ((float)transfer_ms / 1000);
     qInfo() << "[OK] Effective read speed [kbit/s]:" << speed;
+    if (diag) {
+        const uint32_t sector_size = target ? target->FLASH_SECTOR_SIZE() : 0;
+        qInfo().noquote() << QString("[esp-diag] read offset=0x%1 size=%2 sector=%3 frames=%4 acks=%5 payload=%6 transfer_ms=%7 total_ms=%8 cmd_reply_ms=%9 data_frames_ms=%10 ack_send_ms=%11 md5_frame_ms=%12 host_md5_ms=%13 payload_kbit_s=%14")
+            .arg(QString::number(offset, 16).toUpper())
+            .arg(size)
+            .arg(sector_size)
+            .arg(frame_count)
+            .arg(ack_count)
+            .arg(payload_bytes)
+            .arg(transfer_ms)
+            .arg(total_ms)
+            .arg(command_reply_ms)
+            .arg(data_frames_ms)
+            .arg(ack_send_ms)
+            .arg(md5_frame_ms)
+            .arg(host_md5_ms)
+            .arg(kbitPerSecond(payload_bytes, transfer_ms), 0, 'f', 2);
+    }
 
     return received_data;
 }
@@ -829,19 +891,29 @@ std::vector<uint8_t> compress_vector(const std::vector<uint8_t>& source) {
 
 bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_t>& data, bool compress) {
     uint32_t max_packet_size = target->FLASH_WRITE_SIZE();
+    const bool diag = isDiagEnabled();
+    int compress_ms = 0;
+    int flash_begin_ms = 0;
+    int flash_packets_ms = 0;
+    int final_wait_ms = 0;
+    quint64 packet_count = 0;
 
     // qInfo() << (compress ? "[OK] Compressed flash upload started" : "[OK] Flash upload started");
 
     // compress data if needed
     vector<uint8_t> compressed_data;
+    QTime lap = QTime::currentTime();
     if (compress) compressed_data = compress_vector(data);
+    compress_ms = lap.msecsTo(QTime::currentTime());
     const vector<uint8_t>& upload = compress ? compressed_data : data;
 
     // calculate number of required packets
     uint32_t number_of_data_packets = ceil((float)upload.size() / float(max_packet_size));
+    lap = QTime::currentTime();
     if (!flashBegin(data.size(), number_of_data_packets, max_packet_size, memory_offset, compress)) {
         return false;
     }
+    flash_begin_ms = lap.msecsTo(QTime::currentTime());
 
     // write flash
     vector<uint8_t> tmp_vec;
@@ -854,23 +926,50 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
         }
         tmp_vec.push_back(upload[i]);
         if (tmp_vec.size() >= max_packet_size) {
+            lap = QTime::currentTime();
             if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
                 return false;
             }
+            flash_packets_ms += lap.msecsTo(QTime::currentTime());
+            packet_count++;
             frame_n++;
             tmp_vec.clear();
         }
     }
     if (tmp_vec.size() != 0) {
+        lap = QTime::currentTime();
         if (!flashDataOneBlock(frame_n, tmp_vec, compress)) {
             return false;
         }
+        flash_packets_ms += lap.msecsTo(QTime::currentTime());
+        packet_count++;
     }
     
     // Stub only writes each block to flash after 'ack'ing the receive,
     // so do a final dummy operation which will not be 'ack'ed
     // until the last block has actually been written out to flash
+    lap = QTime::currentTime();
     read_reg(target->CHIP_DETECT_MAGIC_REG_ADDR());
+    final_wait_ms = lap.msecsTo(QTime::currentTime());
+
+    if (diag) {
+        const quint64 logical_size = static_cast<quint64>(data.size());
+        const quint64 wire_size = static_cast<quint64>(upload.size());
+        const double ratio = logical_size == 0 ? 1.0 : static_cast<double>(wire_size) / static_cast<double>(logical_size);
+        qInfo().noquote() << QString("[esp-diag] flashData offset=0x%1 logical=%2 wire=%3 ratio=%4 compressed=%5 max_packet=%6 packets=%7 compress_ms=%8 begin_ms=%9 packet_ms=%10 final_wait_ms=%11 wire_kbit_s=%12")
+            .arg(QString::number(memory_offset, 16).toUpper())
+            .arg(logical_size)
+            .arg(wire_size)
+            .arg(ratio, 0, 'f', 4)
+            .arg(compress ? "yes" : "no")
+            .arg(max_packet_size)
+            .arg(packet_count)
+            .arg(compress_ms)
+            .arg(flash_begin_ms)
+            .arg(flash_packets_ms)
+            .arg(final_wait_ms)
+            .arg(kbitPerSecond(wire_size, flash_packets_ms + flash_begin_ms + final_wait_ms), 0, 'f', 2);
+    }
 
     return true;
 }
@@ -920,6 +1019,10 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
     bool upload_result = true;
+    const bool diag = isDiagEnabled();
+    int block_upload_verify_ms = 0;
+    quint64 logical_uploaded = 0;
+    quint64 block_count = 0;
 
     // check that target is connected
     if (target == NULL || serial == NULL || !serial->isOpen()) {
@@ -980,11 +1083,13 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
                 return false;
             }
             if (attempt != 0) qInfo() << "Retry data block";
+            QTime block_lap = QTime::currentTime();
             upload_result = flashData(offset, block, compressed);
             if (upload_result == true) {
                 upload_result = verifyFlashPr(offset, block);
-                if (upload_result == true) break;
             }
+            block_upload_verify_ms += block_lap.msecsTo(QTime::currentTime());
+            if (upload_result == true) break;
         }
 
         // stop writing process if one block failed
@@ -996,6 +1101,8 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
 
         // update progress bar
         quint64 written = offset - memory_offset + current_block_size;
+        logical_uploaded = written;
+        block_count++;
         emit progress_signal(static_cast<int>(written * 100 / total_length));
         if (progress_bytes_enabled)
             emit progress_bytes_signal(written, static_cast<quint64>(total_length));
@@ -1010,6 +1117,17 @@ bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, b
     if (duration <= 0) duration = 1;
     float speed = ((float)data.size() * 8 / 1000) / ((float)duration / 1000);
     qInfo() << "[OK] Effective speed [kbit/s]:" << speed;
+    if (diag) {
+        qInfo().noquote() << QString("[esp-diag] flashUpload offset=0x%1 logical=%2 blocks=%3 block_size=%4 compressed=%5 total_ms=%6 block_upload_verify_ms=%7 logical_kbit_s=%8")
+            .arg(QString::number(memory_offset, 16).toUpper())
+            .arg(logical_uploaded)
+            .arg(block_count)
+            .arg(block_size)
+            .arg(compressed ? "yes" : "no")
+            .arg(duration)
+            .arg(block_upload_verify_ms)
+            .arg(kbitPerSecond(logical_uploaded, duration), 0, 'f', 2);
+    }
     return true;
 }
 
