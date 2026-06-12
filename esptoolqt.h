@@ -152,6 +152,7 @@ public:
 
     // verify flash
     bool verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data);
+    bool verifyFlashBlockMd5(uint32_t memory_offset, const std::vector<uint8_t>& data);
 
     void progress(float);
     bool serial_progress_enabled = false;

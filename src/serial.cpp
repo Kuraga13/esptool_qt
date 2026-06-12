@@ -1057,6 +1057,11 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
     }
 }
 
+bool EspToolQt::verifyFlashBlockMd5(uint32_t memory_offset, const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> copy = data;
+    return verifyFlashPr(memory_offset, copy);
+}
+
 // #define ESP_TOOL_UPLOAD_DEBUG
 bool EspToolQt::flashUpload(uint32_t memory_offset, std::vector<uint8_t> data, bool compressed) {
     QTime start = QTime::currentTime();
