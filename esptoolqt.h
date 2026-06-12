@@ -89,6 +89,9 @@ public:
     void resetToBoot(ResetStrategy);
     void resetFromBoot();
     ResetStrategy resetStrategy = ResetStrategy::classic_reset;
+    bool swapDtrRts = false;
+    QString lastConnectError;
+    void setSwapDtrRts(bool swap) { swapDtrRts = swap; }
 
     // serial
     static std::vector<QString> getPorts();
@@ -105,6 +108,7 @@ public:
     bool serialWrite(std::vector<uint8_t>, int timeout_ms = 1000);
     std::vector<uint8_t> serialRead(int timeout_ms = 1000);
     std::vector<uint8_t> serialReadOneFrame(int timeout_ms = 1000);
+    bool syncWithRomBootloader(int attempts = 5);
     bool autoConnect(QString port = NULL);
     bool autoConnect(QString port, uint32_t baud);
     void requestCancel() { cancel_requested.store(true); }

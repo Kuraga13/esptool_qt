@@ -270,11 +270,7 @@ bool EspToolQt::autoConnect(QString port) {
     return autoConnect(port, 460800);
 }
 
-bool EspToolQt::autoConnect(QString port, uint32_t baud) {
-    esp_target_info.connected = false;
-    target = NULL;
-    closePort(); // close port if it was opened
-
+bool EspToolQt::syncWithRomBootloader(int attempts) {
     const vector<uint8_t> sync_sequence_data = {
         0x07, 0x07, 0x12, 0x20,
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
@@ -282,8 +278,49 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55
     };
-
     vector<uint8_t> sync_sequence = slip_encode(ESP_SYNC, sync_sequence_data);
+
+    for (int i = 0; i < attempts; ++i) {
+        if (isCancelled()) return false;
+        serial->clear(QSerialPort::Input);
+        if (!serialWrite(sync_sequence, 100)) {
+            if (!isSerialUsable()) return false;
+            qInfo() << "ESP sync write timed out, reading response anyway";
+        }
+
+        for (int frame = 0; frame < 8; ++frame) {
+            vector<uint8_t> reply = serialReadOneFrame(100);
+            if (isCancelled()) return false;
+            SlipReply slip_reply = slip_parse(reply);
+            if (slip_reply.valid &&
+                slip_reply.command == ESP_SYNC &&
+                slip_reply.data.size() >= 2 &&
+                slip_reply.data[0] == 0 &&
+                slip_reply.data[1] == 0) {
+                return true;
+            }
+        }
+        QThread::msleep(100);
+    }
+
+    return false;
+}
+
+static bool isEspressifUsbPort(const QString &portName)
+{
+    const auto infos = QSerialPortInfo::availablePorts();
+    for (const QSerialPortInfo &info : infos) {
+        if (info.portName() != portName) continue;
+        return info.hasVendorIdentifier() && info.vendorIdentifier() == 0x303A;
+    }
+    return false;
+}
+
+bool EspToolQt::autoConnect(QString port, uint32_t baud) {
+    esp_target_info.connected = false;
+    target = NULL;
+    lastConnectError.clear();
+    closePort(); // close port if it was opened
 
     std::vector<QString> ports;
     
@@ -293,17 +330,23 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
         ports.push_back(port);
     }
 
-    QVector<ResetStrategy> resets;
-    resets.append(ResetStrategy::classic_reset);
-    resets.append(ResetStrategy::usb_jtag_serial_reset);
-
     bool done = false;
     QString found_port;
+    QString last_sync_error;
 
     for (auto port = ports.rbegin(); port < ports.rend(); port++) {
         if (isCancelled()) {
             closePort();
             return false;
+        }
+
+        QVector<ResetStrategy> resets;
+        if (isEspressifUsbPort(*port)) {
+            resets.append(ResetStrategy::usb_jtag_serial_reset);
+            resets.append(ResetStrategy::classic_reset);
+        } else {
+            resets.append(ResetStrategy::classic_reset);
+            resets.append(ResetStrategy::usb_jtag_serial_reset);
         }
 
         for (auto reset : resets){
@@ -316,28 +359,19 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
             if (port_opened) {
                 resetToBoot(reset);
 
-                for (int i = 0; i < 4; i++) {
-                    if (isCancelled()) {
-                        closePort();
-                        return false;
-                    }
-                    serialWrite(sync_sequence, 50);
-                    vector<uint8_t> data = serialRead(50);
-                    if (isCancelled()) {
-                        closePort();
-                        return false;
-                    }
-
-                    if (data.size() > 50){
-                        done = true;
-                        found_port = *port;
-                        resetStrategy = reset;
-                        break;
-                    }
-
-                    if (done) break;
+                if (syncWithRomBootloader()) {
+                    done = true;
+                    found_port = *port;
+                    resetStrategy = reset;
+                    break;
                 }
 
+                last_sync_error = QStringLiteral("Couldn't sync to ESP ROM bootloader on %1 with reset strategy %2")
+                                      .arg(*port)
+                                      .arg(static_cast<int>(reset));
+                qInfo() << last_sync_error;
+                serial->clear(QSerialPort::AllDirections);
+                serialRead(200);
                 if (done) break;
                 closePort();
             } else {
@@ -351,7 +385,12 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     if (done){
         qInfo() << "device_found on" << found_port;
     } else {
+        lastConnectError = last_sync_error.isEmpty()
+            ? QStringLiteral("Couldn't sync to ESP ROM bootloader. Check port and wiring.")
+            : last_sync_error;
         qInfo() << "no device found";
+        qInfo() << lastConnectError;
+        qInfo() << "ESP manual boot hint: if this is a development board, hold BOOT, pulse RESET, then retry connect.";
         return false;
     }
 
@@ -366,6 +405,7 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     // determine chip id
     uint32_t x = read_reg(0x40001000);
     if (x == 0) {
+        lastConnectError = QStringLiteral("ESP sync succeeded, but target id register could not be read.");
         qInfo() << "[ERROR] Connection failed. Can't read target id.";
         closePort();
         target = NULL;
@@ -383,6 +423,8 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     if (target == NULL) {
         qInfo() << "[ERROR] Connection failed. Can't determine chip family. Unknown chip id:"
                 << Qt::hex << x;
+        lastConnectError = QStringLiteral("Connection failed. Unknown ESP chip id: 0x%1")
+                               .arg(x, 0, 16);
         closePort();
         target = NULL;
         return false;
