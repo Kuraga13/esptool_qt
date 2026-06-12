@@ -1016,7 +1016,7 @@ bool EspToolQt::flashData(const uint32_t memory_offset, const std::vector<uint8_
     return true;
 }
 
-bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data) {
+VerifyBlockResult EspToolQt::verifyFlashBlockMd5Detailed(uint32_t memory_offset, const std::vector<uint8_t>& data) {
 
     // check md5 of written data
     vector<uint8_t> md5_read_command;
@@ -1025,19 +1025,21 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
     appendU32(&md5_read_command, 0);
     appendU32(&md5_read_command, 0);
     vector<uint8_t> md5_read_command_frame = slip_encode (0x13, md5_read_command);
-    serialWrite(md5_read_command_frame);
+    if (!serialWrite(md5_read_command_frame)) {
+        return VerifyBlockResult::Error;
+    }
     // read reply with custom timeout. md5 calculation takes some time
     vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
     if (isCancelled()) {
         closePort();
-        return false;
+        return VerifyBlockResult::Error;
     }
     SlipReply slip_reply = slip_parse(reply);
 
     // check that we have successfully read md5 from device
     if (slip_reply.valid != true || slip_reply.data.size() < 18) {
         qInfo() << "[ERROR] Failed to get md5 from device";
-        return false;
+        return VerifyBlockResult::Error;
     }
 
     // pop two status bytes from end of frame
@@ -1048,13 +1050,18 @@ bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data)
     vector<uint8_t> md5_from_esp = slip_reply.data;
 
     // md5 hash calculated
-    vector<uint8_t> md5_calculated = calculate_md5_hash(data);
+    std::vector<uint8_t> copy = data;
+    vector<uint8_t> md5_calculated = calculate_md5_hash(copy);
 
     if (md5_from_esp == md5_calculated) {
-        return true;
-    } else {
-        return false;
+        return VerifyBlockResult::Match;
     }
+
+    return VerifyBlockResult::Mismatch;
+}
+
+bool EspToolQt::verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data) {
+    return verifyFlashBlockMd5Detailed(memory_offset, data) == VerifyBlockResult::Match;
 }
 
 bool EspToolQt::verifyFlashBlockMd5(uint32_t memory_offset, const std::vector<uint8_t>& data) {

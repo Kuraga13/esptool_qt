@@ -42,6 +42,12 @@
 
 enum ResetStrategy { classic_reset, usb_jtag_serial_reset };
 
+enum class VerifyBlockResult {
+    Match,
+    Mismatch,
+    Error,
+};
+
 struct EspTargetInfo {
     bool connected;
     QString com_port;
@@ -153,6 +159,7 @@ public:
     // verify flash
     bool verifyFlash(uint32_t memory_offset, std::vector<uint8_t> data);
     bool verifyFlashBlockMd5(uint32_t memory_offset, const std::vector<uint8_t>& data);
+    VerifyBlockResult verifyFlashBlockMd5Detailed(uint32_t memory_offset, const std::vector<uint8_t>& data);
 
     void progress(float);
     bool progress_signal_enabled = true;
