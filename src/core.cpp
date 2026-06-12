@@ -112,7 +112,9 @@ vector<uint8_t> EspToolQt::calculate_md5_hash (std::vector<uint8_t> &data) {
 }
 
 void EspToolQt::progress(float progress) {
-    emit progress_signal(ceil(progress));
+    if (progress_signal_enabled) {
+        emit progress_signal(ceil(progress));
+    }
     if (serial_progress_enabled) {
         QString str= QString::number(progress, 'f', 2);
         str += "%";
