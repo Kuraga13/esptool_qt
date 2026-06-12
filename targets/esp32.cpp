@@ -189,7 +189,7 @@ QVector<QString> Esp32::CHIP_TARGETS() { return {
     "ESP32-D0WD",
     "ESP32-D0WDQ6-V3",
     "ESP32-D0WDQ6",
-    "ESP32-U4WDH"
+    "ESP32-U4WDH",
     "ESP32-S0WD",
     "ESP32-PICO-V3",
     "ESP32-PICO-V3-02",
