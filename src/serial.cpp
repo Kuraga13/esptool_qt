@@ -159,6 +159,28 @@ bool EspToolQt::serialWrite(vector<uint8_t> data, int timeout_ms) {
     return true;
 }
 
+bool EspToolQt::serialWriteWithoutInputClear(vector<uint8_t> data, int timeout_ms) {
+    if (!isSerialUsable()) {
+        qInfo() << "[ERROR] Serial port is not usable before write:" << serialErrorString();
+        closePort();
+        return false;
+    }
+    const qint64 written = serial->write(reinterpret_cast<const char*>(data.data()), data.size());
+    if (written < 0) {
+        qInfo() << "[ERROR] Serial write failed:" << serialErrorString();
+        closePort();
+        return false;
+    }
+    if (!serial->waitForBytesWritten(timeout_ms)) {
+        if (!serial->isOpen() || hasSerialError()) {
+            qInfo() << "[ERROR] Serial write wait failed:" << serialErrorString();
+            closePort();
+        }
+        return false;
+    }
+    return true;
+}
+
 vector<uint8_t> EspToolQt::serialRead(int timeout_ms) {
     QTime timeout = QTime::currentTime().addMSecs(timeout_ms);
     vector<uint8_t> data;
@@ -263,6 +285,88 @@ vector<uint8_t> EspToolQt::serialReadOneFrame(int timeout_ms) {
     }
 
     // return zero length vector if no valid frame found until timeout
+    return zero;
+}
+
+vector<uint8_t> EspToolQt::serialReadOneFrameBuffered(int timeout_ms) {
+    QTime timeout = QTime::currentTime().addMSecs(timeout_ms);
+    vector<uint8_t> data;
+    vector<uint8_t> zero;
+    bool frame_started = false;
+    bool escape_started = false;
+    int pos = 0;
+
+    if (!isSerialUsable()) {
+        qInfo() << "[ERROR] Serial port is not usable before frame read:" << serialErrorString();
+        closePort();
+        return zero;
+    }
+
+    while (QTime::currentTime().msecsTo(timeout) > 0) {
+        if (isCancelled()) return zero;
+        if (pos >= serial_frame_buffer_.size()) {
+            serial_frame_buffer_.clear();
+            pos = 0;
+            if (!serial->waitForReadyRead(1) && (!serial->isOpen() || hasSerialError())) {
+                qInfo() << "[ERROR] Serial frame wait failed:" << serialErrorString();
+                closePort();
+                return zero;
+            }
+
+            serial_frame_buffer_ = serial->readAll();
+            if (!serial->isOpen() || hasSerialError()) {
+                qInfo() << "[ERROR] Serial frame read failed:" << serialErrorString();
+                closePort();
+                return zero;
+            }
+            if (serial_frame_buffer_.isEmpty()) continue;
+        }
+
+        for (; pos < serial_frame_buffer_.size(); ++pos) {
+            char raw_byte = serial_frame_buffer_.at(pos);
+            uint8_t byte = static_cast<uint8_t>(raw_byte);
+            if (!frame_started) {
+                if (byte == 0xC0) {
+                    frame_started = true;
+                }
+                continue;
+            }
+
+            if (byte == 0xC0) {
+                if (!data.empty()) {
+                    serial_frame_buffer_.remove(0, pos);
+                    return data;
+                }
+                frame_started = true;
+                escape_started = false;
+                continue;
+            }
+
+            if (byte == 0xDB) {
+                escape_started = true;
+                continue;
+            }
+
+            if (escape_started) {
+                if (byte == 0xDC) {
+                    data.push_back(0xC0);
+                    escape_started = false;
+                    continue;
+                } else if (byte == 0xDD) {
+                    data.push_back(0xDB);
+                    escape_started = false;
+                    continue;
+                } else {
+                    return zero;
+                }
+            }
+
+            data.push_back(byte);
+        }
+        serial_frame_buffer_.clear();
+        pos = 0;
+    }
+
     return zero;
 }
 
@@ -869,6 +973,152 @@ std::vector<uint8_t> EspToolQt::readFlash(uint32_t offset, uint32_t size) {
             .arg(QString::number(offset, 16).toUpper())
             .arg(size)
             .arg(sector_size)
+            .arg(frame_count)
+            .arg(ack_count)
+            .arg(payload_bytes)
+            .arg(transfer_ms)
+            .arg(total_ms)
+            .arg(command_reply_ms)
+            .arg(data_frames_ms)
+            .arg(ack_send_ms)
+            .arg(md5_frame_ms)
+            .arg(host_md5_ms)
+            .arg(kbitPerSecond(payload_bytes, transfer_ms), 0, 'f', 2);
+    }
+
+    return received_data;
+}
+
+std::vector<uint8_t> EspToolQt::readFlashFast(uint32_t offset, uint32_t size, uint32_t max_in_flight) {
+    QTime start = QTime::currentTime();
+    const bool diag = isDiagEnabled();
+    int command_reply_ms = 0;
+    int data_frames_ms = 0;
+    int ack_send_ms = 0;
+    int md5_frame_ms = 0;
+    int host_md5_ms = 0;
+    quint64 frame_count = 0;
+    quint64 ack_count = 0;
+    quint64 payload_bytes = 0;
+
+    vector<uint8_t> received_data;
+    vector<uint8_t> zero;
+    auto fail_fast_read = [&]() -> vector<uint8_t> {
+        closePort();
+        serial_frame_buffer_.clear();
+        return zero;
+    };
+
+    if (target == NULL || serial == NULL || !serial->isOpen()) {
+        qInfo() << "[Error] Target is not connected";
+        return zero;
+    }
+
+    if (max_in_flight == 0) max_in_flight = 1;
+    serial_frame_buffer_.clear();
+    serial->clear(QSerialPort::Input);
+
+    progress(0);
+    qInfo() << "[OK] ESP fast read enabled, max_in_flight:" << max_in_flight;
+
+    vector<uint8_t> data_field;
+    appendU32(&data_field, offset);
+    appendU32(&data_field, size);
+    appendU32(&data_field, target->FLASH_SECTOR_SIZE());
+    appendU32(&data_field, max_in_flight);
+    vector<uint8_t> packet = slip_encode(0xD2, data_field);
+    if (!serialWriteWithoutInputClear(packet)) {
+        return fail_fast_read();
+    }
+    QTime lap = QTime::currentTime();
+    vector<uint8_t> reply = serialReadOneFrameBuffered();
+    command_reply_ms = lap.msecsTo(QTime::currentTime());
+    if (isCancelled()) {
+        closePort();
+        return zero;
+    }
+    SlipReply slip_reply = slip_parse(reply);
+    if (!slip_reply.valid || slip_reply.command != 0xD2 || slip_reply.data.empty() || slip_reply.data[0] != 0) {
+        qInfo() << "[ERROR] ESP fast read command failed";
+        return fail_fast_read();
+    }
+
+    while (received_data.size() < size) {
+        if (isCancelled()) {
+            closePort();
+            return zero;
+        }
+        progress((float)received_data.size() / (float)size * 100);
+        if (progress_bytes_enabled)
+            emit progress_bytes_signal(received_data.size(), size);
+
+        lap = QTime::currentTime();
+        vector<uint8_t> reply = serialReadOneFrameBuffered();
+        data_frames_ms += lap.msecsTo(QTime::currentTime());
+        if (isCancelled()) {
+            closePort();
+            return zero;
+        }
+        if (reply.size() == 0) return fail_fast_read();
+        frame_count++;
+        payload_bytes += static_cast<quint64>(reply.size());
+
+        received_data.insert(received_data.end(), reply.begin(), reply.end());
+
+        if (received_data.size() < size && reply.size() != target->FLASH_SECTOR_SIZE()) {
+            qInfo() << "Inbound data packet too small";
+            return fail_fast_read();
+        }
+        if (received_data.size() > size) {
+            qInfo() << "Inbound data packet too large";
+            return fail_fast_read();
+        }
+
+        vector<uint8_t> ack;
+        appendU32(&ack, received_data.size());
+        vector<uint8_t> encoded_ack = slip_raw_encode(ack);
+        lap = QTime::currentTime();
+        if (!serialWriteWithoutInputClear(encoded_ack)) {
+            return fail_fast_read();
+        }
+        ack_send_ms += lap.msecsTo(QTime::currentTime());
+        ack_count++;
+    }
+
+    progress(100);
+    int transfer_ms = start.msecsTo(QTime::currentTime());
+    if (transfer_ms <= 0) transfer_ms = 1;
+
+    lap = QTime::currentTime();
+    vector<uint8_t> md5_from_esp = serialReadOneFrameBuffered();
+    md5_frame_ms = lap.msecsTo(QTime::currentTime());
+    if (isCancelled()) {
+        closePort();
+        return zero;
+    }
+
+    lap = QTime::currentTime();
+    vector<uint8_t> md5_calculated = calculate_md5_hash(received_data);
+    host_md5_ms = lap.msecsTo(QTime::currentTime());
+
+    if (md5_from_esp == md5_calculated) {
+        qInfo() << "[OK] MD5 Check Passed";
+    } else {
+        qInfo() << "[ERROR] MD5 Check Failed";
+        return fail_fast_read();
+    }
+
+    int total_ms = start.msecsTo(QTime::currentTime());
+    if (total_ms <= 0) total_ms = 1;
+    float speed = ((float)received_data.size() * 8 / 1000) / ((float)transfer_ms / 1000);
+    qInfo() << "[OK] Effective fast read speed [kbit/s]:" << speed;
+    if (diag) {
+        const uint32_t sector_size = target ? target->FLASH_SECTOR_SIZE() : 0;
+        qInfo().noquote() << QString("[esp-diag] fast_read offset=0x%1 size=%2 sector=%3 max_in_flight=%4 frames=%5 acks=%6 payload=%7 transfer_ms=%8 total_ms=%9 cmd_reply_ms=%10 data_frames_ms=%11 ack_send_ms=%12 md5_frame_ms=%13 host_md5_ms=%14 payload_kbit_s=%15")
+            .arg(QString::number(offset, 16).toUpper())
+            .arg(size)
+            .arg(sector_size)
+            .arg(max_in_flight)
             .arg(frame_count)
             .arg(ack_count)
             .arg(payload_bytes)

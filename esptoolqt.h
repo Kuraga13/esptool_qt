@@ -36,6 +36,7 @@
 
 #include <QObject>
 #include <QSerialPort>
+#include <QByteArray>
 #include <atomic>
 #include <vector>
 #include "targets/esp_base.h"
@@ -75,6 +76,9 @@ private:
 
     // verify flash
     bool verifyFlashPr(uint32_t memory_offset, std::vector<uint8_t> data);
+    bool serialWriteWithoutInputClear(std::vector<uint8_t> data, int timeout_ms = 1000);
+    std::vector<uint8_t> serialReadOneFrameBuffered(int timeout_ms = 1000);
+    QByteArray serial_frame_buffer_;
 
 public:
     // helpers
@@ -151,6 +155,7 @@ public:
 
     // read flash
     std::vector<uint8_t> readFlash(uint32_t memory_offset, uint32_t size);
+    std::vector<uint8_t> readFlashFast(uint32_t memory_offset, uint32_t size, uint32_t max_in_flight = 64);
     std::vector<uint8_t> readFlashWithAgent(uint32_t memory_offset, uint32_t size);
 
     // write flash
