@@ -1000,6 +1000,13 @@ std::vector<uint8_t> EspToolQt::readFlashFast(uint32_t offset, uint32_t size, ui
     quint64 frame_count = 0;
     quint64 ack_count = 0;
     quint64 payload_bytes = 0;
+    int first_frame_ms = 0;
+    int max_frame_ms = 0;
+    int max_ack_ms = 0;
+    quint64 slow_frame_count = 0;
+    quint64 slow_ack_count = 0;
+    quint64 last_diag_bytes = 0;
+    QTime last_diag_time = start;
 
     vector<uint8_t> received_data;
     vector<uint8_t> zero;
@@ -1020,6 +1027,18 @@ std::vector<uint8_t> EspToolQt::readFlashFast(uint32_t offset, uint32_t size, ui
 
     progress(0);
     qInfo() << "[OK] ESP fast read enabled, max_in_flight:" << max_in_flight;
+    if (diag) {
+        const qint64 baud = serial ? serial->baudRate() : 0;
+        const QString chip = target ? target->CHIP_NAME() : QStringLiteral("unknown");
+        const uint32_t sector_size = target ? target->FLASH_SECTOR_SIZE() : 0;
+        qInfo().noquote() << QString("[esp-diag] fast_read_start chip=%1 baud=%2 offset=0x%3 size=%4 sector=%5 max_in_flight=%6")
+            .arg(chip)
+            .arg(baud)
+            .arg(QString::number(offset, 16).toUpper())
+            .arg(static_cast<qulonglong>(size))
+            .arg(sector_size)
+            .arg(max_in_flight);
+    }
 
     vector<uint8_t> data_field;
     appendU32(&data_field, offset);
@@ -1054,7 +1073,11 @@ std::vector<uint8_t> EspToolQt::readFlashFast(uint32_t offset, uint32_t size, ui
 
         lap = QTime::currentTime();
         vector<uint8_t> reply = serialReadOneFrameBuffered();
-        data_frames_ms += lap.msecsTo(QTime::currentTime());
+        const int frame_ms = lap.msecsTo(QTime::currentTime());
+        data_frames_ms += frame_ms;
+        if (frame_count == 0) first_frame_ms = frame_ms;
+        if (frame_ms > max_frame_ms) max_frame_ms = frame_ms;
+        if (frame_ms > 100) slow_frame_count++;
         if (isCancelled()) {
             closePort();
             return zero;
@@ -1081,8 +1104,37 @@ std::vector<uint8_t> EspToolQt::readFlashFast(uint32_t offset, uint32_t size, ui
         if (!serialWriteWithoutInputClear(encoded_ack)) {
             return fail_fast_read();
         }
-        ack_send_ms += lap.msecsTo(QTime::currentTime());
+        const int ack_ms = lap.msecsTo(QTime::currentTime());
+        ack_send_ms += ack_ms;
+        if (ack_ms > max_ack_ms) max_ack_ms = ack_ms;
+        if (ack_ms > 20) slow_ack_count++;
         ack_count++;
+
+        if (diag) {
+            const int since_last_diag_ms = last_diag_time.msecsTo(QTime::currentTime());
+            const bool should_log = since_last_diag_ms >= 3000 || received_data.size() == size;
+            if (should_log) {
+                const quint64 interval_bytes = static_cast<quint64>(received_data.size()) - last_diag_bytes;
+                const double instant_kbit_s = kbitPerSecond(interval_bytes, since_last_diag_ms);
+                const int elapsed_ms = start.msecsTo(QTime::currentTime());
+                qInfo().noquote() << QString("[esp-diag] fast_read_progress bytes=%1/%2 frames=%3 acks=%4 avg_kbit_s=%5 inst_kbit_s=%6 last_frame_ms=%7 max_frame_ms=%8 last_ack_ms=%9 max_ack_ms=%10 slow_frames=%11 slow_acks=%12 buffered_rx=%13")
+                    .arg(static_cast<qulonglong>(received_data.size()))
+                    .arg(static_cast<qulonglong>(size))
+                    .arg(frame_count)
+                    .arg(ack_count)
+                    .arg(kbitPerSecond(received_data.size(), elapsed_ms), 0, 'f', 2)
+                    .arg(instant_kbit_s, 0, 'f', 2)
+                    .arg(frame_ms)
+                    .arg(max_frame_ms)
+                    .arg(ack_ms)
+                    .arg(max_ack_ms)
+                    .arg(slow_frame_count)
+                    .arg(slow_ack_count)
+                    .arg(serial_frame_buffer_.size());
+                last_diag_time = QTime::currentTime();
+                last_diag_bytes = static_cast<quint64>(received_data.size());
+            }
+        }
     }
 
     progress(100);
@@ -1130,6 +1182,12 @@ std::vector<uint8_t> EspToolQt::readFlashFast(uint32_t offset, uint32_t size, ui
             .arg(md5_frame_ms)
             .arg(host_md5_ms)
             .arg(kbitPerSecond(payload_bytes, transfer_ms), 0, 'f', 2);
+        qInfo().noquote() << QString("[esp-diag] fast_read_latency first_frame_ms=%1 max_frame_ms=%2 max_ack_ms=%3 slow_frames_gt100ms=%4 slow_acks_gt20ms=%5")
+            .arg(first_frame_ms)
+            .arg(max_frame_ms)
+            .arg(max_ack_ms)
+            .arg(slow_frame_count)
+            .arg(slow_ack_count);
     }
 
     return received_data;
