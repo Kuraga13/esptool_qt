@@ -1025,9 +1025,7 @@ VerifyBlockResult EspToolQt::verifyFlashBlockMd5Detailed(uint32_t memory_offset,
     appendU32(&md5_read_command, 0);
     appendU32(&md5_read_command, 0);
     vector<uint8_t> md5_read_command_frame = slip_encode (0x13, md5_read_command);
-    if (!serialWrite(md5_read_command_frame)) {
-        return VerifyBlockResult::Error;
-    }
+    serialWrite(md5_read_command_frame);
     // read reply with custom timeout. md5 calculation takes some time
     vector<uint8_t> reply = serialReadOneFrame((uint32_t)5000 * (uint32_t)ceil((float)data.size()/((float)1024 * 1024)));
     if (isCancelled()) {
