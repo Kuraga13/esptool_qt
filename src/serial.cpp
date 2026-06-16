@@ -723,6 +723,32 @@ static bool isEspressifUsbPort(const QString &portName)
 
 bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     const bool diag = isDiagEnabled();
+
+    // Variant A: do not tear down a live, healthy session on a repeated connect.
+    // On native USB-CDC parts (ESP32-S2/S3 USB-OTG) closing the working port and
+    // immediately reopening the same device can hang inside QSerialPort::open()
+    // before the native handle exists, so requestCancel()/CancelIoEx cannot break
+    // it. If we are already connected on the requested port/baud and the stub
+    // still answers a register read, reuse the open handle instead of close+open.
+    if (!isCancelled()
+        && serial != NULL && serial->isOpen() && isSerialUsable()
+        && esp_target_info.connected && target != NULL
+        && static_cast<uint32_t>(serial->baudRate()) == baud
+        && (port.isEmpty() || port == esp_target_info.com_port)) {
+        if (diag) qInfo() << "[esp-diag] autoConnect live-session probe" << esp_target_info.com_port
+                          << "baud" << baud << serialDiagState(serial);
+        serial->clear();
+        const uint32_t magic = read_reg(0x40001000);
+        if (!isCancelled() && target->CHIP_COMPARE_MAGIC_VALUE(magic)) {
+            qInfo() << "ESP : reusing live session on" << esp_target_info.com_port
+                    << "- skipping risky close/reopen";
+            lastConnectError.clear();
+            return true;
+        }
+        if (diag) qInfo() << "[esp-diag] autoConnect live-session probe failed magic"
+                          << Qt::hex << magic << "- falling back to full reconnect";
+    }
+
     esp_target_info.connected = false;
     target = NULL;
     lastConnectError.clear();
