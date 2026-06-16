@@ -22,6 +22,7 @@
 #include <QElapsedTimer>
 #include <QDebug>
 #include <QSerialPortInfo>
+#include <QStringList>
 #include <zlib.h>
 #include <QFile>
 
@@ -37,6 +38,30 @@ using SlipReply = EspToolQt::SlipReply;
 
 namespace {
 std::atomic<bool> g_esp_diag_enabled{false};
+
+QString serialDiagState(const QSerialPort *serial)
+{
+    if (serial == nullptr) {
+        return QStringLiteral("serial=null");
+    }
+
+    return QStringLiteral("serial=%1 port=%2 open=%3 error=%4 text=%5")
+        .arg(QString::number(reinterpret_cast<quintptr>(serial), 16))
+        .arg(serial->portName())
+        .arg(serial->isOpen())
+        .arg(static_cast<int>(serial->error()))
+        .arg(serial->errorString());
+}
+
+QString availablePortsDiagString()
+{
+    QStringList names;
+    const auto ports = QSerialPortInfo::availablePorts();
+    for (const QSerialPortInfo &port : ports) {
+        names.push_back(port.portName());
+    }
+    return names.join(QStringLiteral(","));
+}
 
 double kbitPerSecond(quint64 bytes, int duration_ms)
 {
@@ -114,11 +139,18 @@ void EspToolQt::setPortName(QString name) {
 bool EspToolQt::openPort() {
     if (serial == NULL) return false;
     if (isCancelled()) return false;
+    const bool diag = isDiagEnabled();
+    if (diag) qInfo() << "[esp-diag] openPort before clearError" << serialDiagState(serial)
+                      << "available" << availablePortsDiagString();
     serial->clearError();
+    if (diag) qInfo() << "[esp-diag] openPort before open" << serialDiagState(serial);
     const bool opened = serial->open(QIODevice::ReadWrite);
+    if (diag) qInfo() << "[esp-diag] openPort after open" << serialDiagState(serial)
+                      << "opened" << opened;
     if (opened) {
         void *raw_handle = serial->handle();
         serial_native_handle_.store(raw_handle);
+        if (diag) qInfo() << "[esp-diag] openPort native handle" << raw_handle;
     } else {
         serial_native_handle_.store(nullptr);
     }
@@ -133,19 +165,28 @@ bool EspToolQt::openPort() {
 }
 
 bool EspToolQt::openPort(QString port) {
+    if (isDiagEnabled()) qInfo() << "[esp-diag] openPort setPortName" << port
+                                 << "before" << serialDiagState(serial);
     serial->setPortName(port);
     return openPort();
 }
 
 bool EspToolQt::openPort(QString port, int baud) {
+    if (isDiagEnabled()) qInfo() << "[esp-diag] openPort setBaudRate" << port << baud
+                                 << "before" << serialDiagState(serial);
     serial->setBaudRate(baud);
     return openPort(port);
 }
 
 void EspToolQt::closePort() {
     if (serial == NULL) return;
+    const bool diag = isDiagEnabled();
+    if (diag) qInfo() << "[esp-diag] closePort before" << serialDiagState(serial)
+                      << "available" << availablePortsDiagString();
     serial_native_handle_.store(nullptr);
     serial->close();
+    if (diag) qInfo() << "[esp-diag] closePort after" << serialDiagState(serial)
+                      << "available" << availablePortsDiagString();
     esp_target_info.connected = false;
 }
 
@@ -477,7 +518,13 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     esp_target_info.connected = false;
     target = NULL;
     lastConnectError.clear();
+    if (diag) qInfo() << "[esp-diag] autoConnect start requested_port" << port
+                      << "baud" << baud
+                      << serialDiagState(serial)
+                      << "available" << availablePortsDiagString();
     closePort(); // close port if it was opened
+    if (diag) qInfo() << "[esp-diag] autoConnect after initial close" << serialDiagState(serial)
+                      << "available" << availablePortsDiagString();
 
     std::vector<QString> ports;
     
@@ -486,6 +533,9 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     } else {
         ports.push_back(port);
     }
+    if (diag) qInfo() << "[esp-diag] autoConnect candidate ports" << availablePortsDiagString()
+                      << "requested_port" << port
+                      << "count" << static_cast<int>(ports.size());
 
     bool done = false;
     QString found_port;
