@@ -21,6 +21,7 @@
 #include <QTime>
 #include <QElapsedTimer>
 #include <QDebug>
+#include <QProcessEnvironment>
 #include <QSerialPortInfo>
 #include <QStringList>
 #include <zlib.h>
@@ -61,6 +62,13 @@ QString availablePortsDiagString()
         names.push_back(port.portName());
     }
     return names.join(QStringLiteral(","));
+}
+
+bool isWinOpenMirrorEnabled()
+{
+    const QString value = QProcessEnvironment::systemEnvironment()
+        .value(QStringLiteral("MULTIPROG_ESP_WINOPEN_MIRROR"));
+    return value == QStringLiteral("1") || value.compare(QStringLiteral("true"), Qt::CaseInsensitive) == 0;
 }
 
 #if defined(Q_OS_WIN32)
@@ -340,7 +348,7 @@ bool EspToolQt::openPort() {
     serial->clearError();
     if (diag) qInfo() << "[esp-diag] openPort before open" << serialDiagState(serial);
 #if defined(Q_OS_WIN32)
-    if (diag) {
+    if (diag && isWinOpenMirrorEnabled()) {
         return runWinSerialOpenMirror(serial);
     }
 #endif
