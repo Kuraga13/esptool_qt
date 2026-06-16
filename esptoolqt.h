@@ -79,6 +79,7 @@ private:
     bool serialWriteWithoutInputClear(std::vector<uint8_t> data, int timeout_ms = 1000);
     std::vector<uint8_t> serialReadOneFrameBuffered(int timeout_ms = 1000);
     QByteArray serial_frame_buffer_;
+    std::atomic<void*> serial_native_handle_{nullptr};
 
 public:
     // helpers
@@ -121,7 +122,7 @@ public:
     bool syncWithRomBootloader(int attempts = 5);
     bool autoConnect(QString port = NULL);
     bool autoConnect(QString port, uint32_t baud);
-    void requestCancel() { cancel_requested.store(true); }
+    void requestCancel();
     void clearCancel() { cancel_requested.store(false); }
     bool isCancelled() const { return cancel_requested.load(); }
     static void setDiagEnabled(bool enabled);

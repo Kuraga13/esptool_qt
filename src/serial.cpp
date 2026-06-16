@@ -19,6 +19,7 @@
 
 #include <QThread>
 #include <QTime>
+#include <QElapsedTimer>
 #include <QDebug>
 #include <QSerialPortInfo>
 #include <zlib.h>
@@ -50,6 +51,26 @@ void EspToolQt::setDiagEnabled(bool enabled) {
 
 bool EspToolQt::isDiagEnabled() {
     return g_esp_diag_enabled.load();
+}
+
+void EspToolQt::requestCancel() {
+    cancel_requested.store(true);
+
+#if defined(Q_OS_WIN32)
+    if (!serial)
+        return;
+
+    void *raw_handle = serial_native_handle_.load();
+    if (raw_handle == nullptr)
+        return;
+
+    HANDLE handle = static_cast<HANDLE>(raw_handle);
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE)
+        return;
+
+    CancelIoEx(handle, nullptr);
+    PurgeComm(handle, PURGE_RXABORT | PURGE_TXABORT | PURGE_RXCLEAR | PURGE_TXCLEAR);
+#endif
 }
 
 QVector<QString> EspToolQt::getFamilies() {
@@ -92,8 +113,19 @@ void EspToolQt::setPortName(QString name) {
 
 bool EspToolQt::openPort() {
     if (serial == NULL) return false;
+    if (isCancelled()) return false;
     serial->clearError();
     const bool opened = serial->open(QIODevice::ReadWrite);
+    if (opened) {
+        void *raw_handle = serial->handle();
+        serial_native_handle_.store(raw_handle);
+    } else {
+        serial_native_handle_.store(nullptr);
+    }
+    if (isCancelled()) {
+        if (opened) closePort();
+        return false;
+    }
     if (!opened) {
         qInfo() << "[ERROR] Can't open serial port:" << serialErrorString();
     }
@@ -112,6 +144,7 @@ bool EspToolQt::openPort(QString port, int baud) {
 
 void EspToolQt::closePort() {
     if (serial == NULL) return;
+    serial_native_handle_.store(nullptr);
     serial->close();
     esp_target_info.connected = false;
 }
@@ -137,6 +170,7 @@ QString EspToolQt::serialErrorString() const {
 }
 
 bool EspToolQt::serialWrite(vector<uint8_t> data, int timeout_ms) {
+    if (isCancelled()) return false;
     if (!isSerialUsable()) {
         qInfo() << "[ERROR] Serial port is not usable before write:" << serialErrorString();
         closePort();
@@ -150,6 +184,7 @@ bool EspToolQt::serialWrite(vector<uint8_t> data, int timeout_ms) {
         return false;
     }
     if (!serial->waitForBytesWritten(timeout_ms)) {
+        if (isCancelled()) return false;
         if (!serial->isOpen() || hasSerialError()) {
             qInfo() << "[ERROR] Serial write wait failed:" << serialErrorString();
             closePort();
@@ -160,6 +195,7 @@ bool EspToolQt::serialWrite(vector<uint8_t> data, int timeout_ms) {
 }
 
 bool EspToolQt::serialWriteWithoutInputClear(vector<uint8_t> data, int timeout_ms) {
+    if (isCancelled()) return false;
     if (!isSerialUsable()) {
         qInfo() << "[ERROR] Serial port is not usable before write:" << serialErrorString();
         closePort();
@@ -172,6 +208,7 @@ bool EspToolQt::serialWriteWithoutInputClear(vector<uint8_t> data, int timeout_m
         return false;
     }
     if (!serial->waitForBytesWritten(timeout_ms)) {
+        if (isCancelled()) return false;
         if (!serial->isOpen() || hasSerialError()) {
             qInfo() << "[ERROR] Serial write wait failed:" << serialErrorString();
             closePort();
@@ -375,6 +412,7 @@ bool EspToolQt::autoConnect(QString port) {
 }
 
 bool EspToolQt::syncWithRomBootloader(int attempts) {
+    const bool diag = isDiagEnabled();
     const vector<uint8_t> sync_sequence_data = {
         0x07, 0x07, 0x12, 0x20,
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
@@ -386,14 +424,28 @@ bool EspToolQt::syncWithRomBootloader(int attempts) {
 
     for (int i = 0; i < attempts; ++i) {
         if (isCancelled()) return false;
+        if (diag) qInfo() << "[esp-diag] sync attempt start" << i;
         serial->clear(QSerialPort::Input);
+        QElapsedTimer write_timer;
+        write_timer.start();
         if (!serialWrite(sync_sequence, 100)) {
+            if (diag) qInfo() << "[esp-diag] sync write failed/timeout attempt" << i
+                              << "elapsed_ms" << write_timer.elapsed();
             if (!isSerialUsable()) return false;
             qInfo() << "ESP sync write timed out, reading response anyway";
+        } else if (diag) {
+            qInfo() << "[esp-diag] sync write ok attempt" << i
+                    << "elapsed_ms" << write_timer.elapsed();
         }
 
         for (int frame = 0; frame < 8; ++frame) {
+            if (diag) qInfo() << "[esp-diag] sync frame wait start attempt" << i << "frame" << frame;
+            QElapsedTimer frame_timer;
+            frame_timer.start();
             vector<uint8_t> reply = serialReadOneFrame(100);
+            if (diag) qInfo() << "[esp-diag] sync frame wait end attempt" << i << "frame" << frame
+                              << "reply_size" << reply.size()
+                              << "elapsed_ms" << frame_timer.elapsed();
             if (isCancelled()) return false;
             SlipReply slip_reply = slip_parse(reply);
             if (slip_reply.valid &&
@@ -421,6 +473,7 @@ static bool isEspressifUsbPort(const QString &portName)
 }
 
 bool EspToolQt::autoConnect(QString port, uint32_t baud) {
+    const bool diag = isDiagEnabled();
     esp_target_info.connected = false;
     target = NULL;
     lastConnectError.clear();
@@ -459,16 +512,41 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
                 return false;
             }
             qInfo() << "Try" << *port << "reset_strategy" << reset;
+            QElapsedTimer step_timer;
+            if (diag) {
+                qInfo() << "[esp-diag] connect open start" << *port << "reset_strategy" << reset;
+                step_timer.start();
+            }
             bool port_opened = openPort(*port,115200);
+            if (diag) qInfo() << "[esp-diag] connect open end" << *port
+                              << "ok" << port_opened
+                              << "elapsed_ms" << step_timer.elapsed();
             if (port_opened) {
+                if (diag) {
+                    qInfo() << "[esp-diag] connect reset start" << *port << "reset_strategy" << reset;
+                    step_timer.restart();
+                }
                 resetToBoot(reset);
+                if (diag) qInfo() << "[esp-diag] connect reset end" << *port
+                                  << "reset_strategy" << reset
+                                  << "elapsed_ms" << step_timer.elapsed();
 
+                if (diag) {
+                    qInfo() << "[esp-diag] connect sync start" << *port << "reset_strategy" << reset;
+                    step_timer.restart();
+                }
                 if (syncWithRomBootloader()) {
+                    if (diag) qInfo() << "[esp-diag] connect sync success" << *port
+                                      << "reset_strategy" << reset
+                                      << "elapsed_ms" << step_timer.elapsed();
                     done = true;
                     found_port = *port;
                     resetStrategy = reset;
                     break;
                 }
+                if (diag) qInfo() << "[esp-diag] connect sync fail" << *port
+                                  << "reset_strategy" << reset
+                                  << "elapsed_ms" << step_timer.elapsed();
 
                 last_sync_error = QStringLiteral("Couldn't sync to ESP ROM bootloader on %1 with reset strategy %2")
                                       .arg(*port)
