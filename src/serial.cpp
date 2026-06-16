@@ -63,6 +63,201 @@ QString availablePortsDiagString()
     return names.join(QStringLiteral(","));
 }
 
+#if defined(Q_OS_WIN32)
+QString winSerialPath(const QString &portName)
+{
+    if (portName.startsWith(QStringLiteral("\\\\.\\")) || portName.startsWith(QStringLiteral("//./"))) {
+        return portName;
+    }
+    return QStringLiteral("\\\\.\\%1").arg(portName);
+}
+
+DWORD winBaudRate(qint32 baudRate)
+{
+    switch (baudRate) {
+    case QSerialPort::Baud1200: return CBR_1200;
+    case QSerialPort::Baud2400: return CBR_2400;
+    case QSerialPort::Baud4800: return CBR_4800;
+    case QSerialPort::Baud9600: return CBR_9600;
+    case QSerialPort::Baud19200: return CBR_19200;
+    case QSerialPort::Baud38400: return CBR_38400;
+    case QSerialPort::Baud57600: return CBR_57600;
+    case QSerialPort::Baud115200: return CBR_115200;
+    default: return static_cast<DWORD>(baudRate);
+    }
+}
+
+BYTE winParity(QSerialPort::Parity parity)
+{
+    switch (parity) {
+    case QSerialPort::OddParity: return ODDPARITY;
+    case QSerialPort::EvenParity: return EVENPARITY;
+    case QSerialPort::MarkParity: return MARKPARITY;
+    case QSerialPort::SpaceParity: return SPACEPARITY;
+    case QSerialPort::NoParity:
+    default: return NOPARITY;
+    }
+}
+
+BYTE winStopBits(QSerialPort::StopBits stopBits)
+{
+    switch (stopBits) {
+    case QSerialPort::OneAndHalfStop: return ONE5STOPBITS;
+    case QSerialPort::TwoStop: return TWOSTOPBITS;
+    case QSerialPort::OneStop:
+    default: return ONESTOPBIT;
+    }
+}
+
+void applyQtSerialDcbSettings(DCB *dcb, const QSerialPort *serial)
+{
+    dcb->fBinary = TRUE;
+    dcb->fAbortOnError = FALSE;
+    dcb->fNull = FALSE;
+    dcb->fErrorChar = FALSE;
+
+    if (dcb->fDtrControl == DTR_CONTROL_HANDSHAKE) {
+        dcb->fDtrControl = DTR_CONTROL_DISABLE;
+    }
+    if (dcb->fRtsControl != RTS_CONTROL_HANDSHAKE) {
+        dcb->fRtsControl = RTS_CONTROL_DISABLE;
+    }
+
+    dcb->BaudRate = winBaudRate(serial->baudRate());
+    dcb->ByteSize = static_cast<BYTE>(serial->dataBits());
+    dcb->Parity = winParity(serial->parity());
+    dcb->fParity = serial->parity() == QSerialPort::NoParity ? FALSE : TRUE;
+    dcb->StopBits = winStopBits(serial->stopBits());
+
+    dcb->fInX = FALSE;
+    dcb->fOutX = FALSE;
+    dcb->fOutxCtsFlow = FALSE;
+    if (dcb->fRtsControl == RTS_CONTROL_HANDSHAKE) {
+        dcb->fRtsControl = RTS_CONTROL_DISABLE;
+    }
+    if (serial->flowControl() == QSerialPort::SoftwareControl) {
+        dcb->fInX = TRUE;
+        dcb->fOutX = TRUE;
+    } else if (serial->flowControl() == QSerialPort::HardwareControl) {
+        dcb->fOutxCtsFlow = TRUE;
+        dcb->fRtsControl = RTS_CONTROL_HANDSHAKE;
+    }
+}
+
+void closeWinHandleWithDiag(HANDLE handle, const char *label)
+{
+    if (handle == INVALID_HANDLE_VALUE || handle == nullptr) {
+        return;
+    }
+    qInfo() << "[esp-diag] winopen" << label << "CloseHandle start";
+    CloseHandle(handle);
+    qInfo() << "[esp-diag] winopen" << label << "CloseHandle end";
+}
+
+bool runWinSerialOpenMirror(const QSerialPort *serial)
+{
+    const QString path = winSerialPath(serial->portName());
+    qInfo() << "[esp-diag] winopen mirror start" << path
+            << "baud" << serial->baudRate()
+            << "data" << serial->dataBits()
+            << "parity" << serial->parity()
+            << "stop" << serial->stopBits()
+            << "flow" << serial->flowControl();
+
+    qInfo() << "[esp-diag] winopen CreateFileW start" << path;
+    HANDLE handle = CreateFileW(reinterpret_cast<LPCWSTR>(path.utf16()),
+                                GENERIC_READ | GENERIC_WRITE,
+                                0,
+                                nullptr,
+                                OPEN_EXISTING,
+                                FILE_FLAG_OVERLAPPED,
+                                nullptr);
+    qInfo() << "[esp-diag] winopen CreateFileW end" << handle << "error" << GetLastError();
+    if (handle == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    DCB restoredDcb;
+    ZeroMemory(&restoredDcb, sizeof(restoredDcb));
+    restoredDcb.DCBlength = sizeof(restoredDcb);
+    qInfo() << "[esp-diag] winopen GetCommState start";
+    const BOOL gotDcb = GetCommState(handle, &restoredDcb);
+    qInfo() << "[esp-diag] winopen GetCommState end" << gotDcb << "error" << GetLastError();
+    if (!gotDcb) {
+        closeWinHandleWithDiag(handle, "after GetCommState failure");
+        return false;
+    }
+
+    DCB currentDcb = restoredDcb;
+    applyQtSerialDcbSettings(&currentDcb, serial);
+    qInfo() << "[esp-diag] winopen SetCommState start";
+    const BOOL setDcb = SetCommState(handle, &currentDcb);
+    qInfo() << "[esp-diag] winopen SetCommState end" << setDcb << "error" << GetLastError();
+    if (!setDcb) {
+        closeWinHandleWithDiag(handle, "after SetCommState failure");
+        return false;
+    }
+
+    COMMTIMEOUTS restoredTimeouts;
+    ZeroMemory(&restoredTimeouts, sizeof(restoredTimeouts));
+    qInfo() << "[esp-diag] winopen GetCommTimeouts start";
+    const BOOL gotTimeouts = GetCommTimeouts(handle, &restoredTimeouts);
+    qInfo() << "[esp-diag] winopen GetCommTimeouts end" << gotTimeouts << "error" << GetLastError();
+    if (!gotTimeouts) {
+        closeWinHandleWithDiag(handle, "after GetCommTimeouts failure");
+        return false;
+    }
+
+    COMMTIMEOUTS currentTimeouts;
+    ZeroMemory(&currentTimeouts, sizeof(currentTimeouts));
+    currentTimeouts.ReadIntervalTimeout = MAXDWORD;
+    qInfo() << "[esp-diag] winopen SetCommTimeouts start";
+    const BOOL setTimeouts = SetCommTimeouts(handle, &currentTimeouts);
+    qInfo() << "[esp-diag] winopen SetCommTimeouts end" << setTimeouts << "error" << GetLastError();
+    if (!setTimeouts) {
+        closeWinHandleWithDiag(handle, "after SetCommTimeouts failure");
+        return false;
+    }
+
+    qInfo() << "[esp-diag] winopen SetCommMask start";
+    const BOOL setMask = SetCommMask(handle, EV_RXCHAR);
+    qInfo() << "[esp-diag] winopen SetCommMask end" << setMask << "error" << GetLastError();
+    if (!setMask) {
+        closeWinHandleWithDiag(handle, "after SetCommMask failure");
+        return false;
+    }
+
+    OVERLAPPED overlapped;
+    ZeroMemory(&overlapped, sizeof(overlapped));
+    qInfo() << "[esp-diag] winopen CreateEvent start";
+    overlapped.hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    qInfo() << "[esp-diag] winopen CreateEvent end" << overlapped.hEvent << "error" << GetLastError();
+    if (!overlapped.hEvent) {
+        closeWinHandleWithDiag(handle, "after CreateEvent failure");
+        return false;
+    }
+
+    DWORD eventMask = 0;
+    qInfo() << "[esp-diag] winopen WaitCommEvent start";
+    const BOOL waitStarted = WaitCommEvent(handle, &eventMask, &overlapped);
+    const DWORD waitError = GetLastError();
+    qInfo() << "[esp-diag] winopen WaitCommEvent end" << waitStarted
+            << "error" << waitError
+            << "eventMask" << eventMask;
+
+    if (!waitStarted && waitError == ERROR_IO_PENDING) {
+        qInfo() << "[esp-diag] winopen CancelIo start";
+        const BOOL cancelled = CancelIo(handle);
+        qInfo() << "[esp-diag] winopen CancelIo end" << cancelled << "error" << GetLastError();
+    }
+
+    closeWinHandleWithDiag(overlapped.hEvent, "event");
+    closeWinHandleWithDiag(handle, "port");
+    qInfo() << "[esp-diag] winopen mirror completed; diagnostic path returns false intentionally";
+    return false;
+}
+#endif
+
 double kbitPerSecond(quint64 bytes, int duration_ms)
 {
     if (duration_ms <= 0) duration_ms = 1;
@@ -144,6 +339,11 @@ bool EspToolQt::openPort() {
                       << "available" << availablePortsDiagString();
     serial->clearError();
     if (diag) qInfo() << "[esp-diag] openPort before open" << serialDiagState(serial);
+#if defined(Q_OS_WIN32)
+    if (diag) {
+        return runWinSerialOpenMirror(serial);
+    }
+#endif
     const bool opened = serial->open(QIODevice::ReadWrite);
     if (diag) qInfo() << "[esp-diag] openPort after open" << serialDiagState(serial)
                       << "opened" << opened;
