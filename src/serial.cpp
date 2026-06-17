@@ -869,7 +869,33 @@ bool EspToolQt::autoConnect(QString port, uint32_t baud) {
     }
 
     // determine chip id
-    uint32_t x = read_reg(0x40001000);
+    //
+    // read_reg() is one-shot: it returns 0 when the single reply frame is empty
+    // or invalid. Right after ROM sync the very first read_reg sometimes times
+    // out — the ROM is not yet ready to service the command, or a stale/partial
+    // sync reply is still draining the rx buffer. Observed in the field as
+    // "Can't read target id" on an otherwise good port that then connects on a
+    // manual retry (Report 1 / 2.3.5 finish test: sync success, then this read
+    // failed once). The chip-magic register is never legitimately 0, so retry,
+    // flushing stale rx between attempts, before giving up — the same robustness
+    // esptool.py applies to register reads. In that one logged occurrence a
+    // single miss was followed by a clean read on the next attempt, so 3
+    // attempts is a comfortable margin over the observed need.
+    uint32_t x = 0;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        if (isCancelled()) {
+            closePort();
+            target = NULL;
+            return false;
+        }
+        x = read_reg(0x40001000);
+        if (isDiagEnabled())
+            qInfo() << "[esp-diag] target id read attempt" << attempt
+                    << "x" << Qt::hex << x << Qt::dec
+                    << (x != 0 ? "ok" : "retry");
+        if (x != 0) break;
+        serialRead(50);   // drain any stale bytes before the next attempt
+    }
     if (x == 0) {
         lastConnectError = QStringLiteral("ESP sync succeeded, but target id register could not be read.");
         qInfo() << "[ERROR] Connection failed. Can't read target id.";
